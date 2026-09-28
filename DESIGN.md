@@ -181,8 +181,8 @@
 - 极小性只到单颗删除那一层：没有"线索最少"的承诺，也没有两颗同摘的实验。
 - 剖分是重启式随机（`partition.js:103`），不是完备枚举：`partitionRestarts` 是它的账
   （本轮 `SAMPLES=24`：4x6 累计 3 次 → 12x12 累计 63 次）。
-- 没有浏览器门禁：`tools/check.mjs:19` 的 `DIRS = ['js','tools','tests']`、`:23` 的
-  `SKIP(_tmp-)` 是纯 Node 口径；第二阶段加壳时要补 `EXTRA_JS` / `SHELLS` 两个空数组
-  （`tools/check.mjs` 文件头写了补法）。
+- 浏览器门禁是第二阶段补上的：`tools/check.mjs:21` 的 `EXTRA_JS = ['server.cjs']` 与 `:22` 的
+  `SHELLS = ['tools/verify.sh']` 就是第一阶段留的两个空数组，现在都填了（`DIRS` 仍只有
+  `js/tools/tests`，根目录那两个文件靠点名进语法门）。Electron 壳仍未开工，所以不进名单。
 - `tests/` 的三套证人测试与 `tools/` 的四套门禁**判据不重叠**：证人测"这条规则删不得 /
   这个出口存在"，门禁测"引擎逐条对账"。删掉 `tests/` 的任何一套，对应那条承诺就只剩 README 在守。

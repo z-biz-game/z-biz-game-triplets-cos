@@ -9,7 +9,9 @@ Naoki Inaba 的三重子：盘面被切成一块块**恰好三格**的区域（�
 `js/main.js` + `server.cjs` + `tools/{playtest.cjs,scenarios.js,golden.mjs,golden-test.mjs,verify.sh}`，端口对 5278/9378。
 第三阶段接的是两道门：`.github/workflows/ci.yml`（逻辑腿：语法门 + 七套 + golden + 难度梯子；浏览器腿：真指针七场，
 根形态与 Pages 前缀形态各一趟）与 `.github/workflows/pages.yml`（部署名单只有 `index.html`、`css/`、`js/`）。
-**这两个文件本轮刚落地，它们在 runner 上跑成什么样还没读回来——没读到的结论不写进这张表。**
+**这两个文件已经在 runner 上读回来了**：提交 `9d41166` 上 CI run `36445508383` 两个 job 全绿
+（`syntax + engine gates` 五步、`real browser gate (both URL shapes)` 两趟 URL 形态各一趟），
+Pages run `36445508423` success，线上站点回 200。
 Electron 壳仍未开工，`package.json` 里也就没有它的脚本和 devDependency——**没接线的东西不进清单**。
 
 ---
@@ -44,7 +46,11 @@ Electron 壳仍未开工，`package.json` 里也就没有它的脚本和 devDepe
 - 一盘题的解是唯一的：出货前由独立穷举计数器 `countByRegion()` 在 250000 结点预算内数过。
 - 尺寸：菜单七档 `4x6 / 6x6 / 6x8 / 6x9 / 8x9 / 9x9 / 8x12`（`generate.js:48`），
   点一次"换一局"要抽几张卡：实测每档 p50 = 1、菜单档 max = 1（12×12 对照档 max = 3）。
-- 浏览器闸（`npm run verify`）的第一读数：七场全绿、合计 90 条、fails=0；URL 三形只跑了本地根与 Pages 前缀两形。
+- 浏览器闸（`npm run verify`）读数：本地根形态七场全绿、合计 90 条、fails=0（第 5 段用本地替身根演一遍
+  Pages 前缀形态）。第三形——线上真部署过的那一份——2026-09-29 跑过：
+  `BASE_URL=https://z-biz-game.github.io/z-biz-game-triplets-cos/ bash tools/verify.sh` 七场全绿、合计 77 条、
+  fails=0；少的 13 条是替身根专属的部署名单断言，在这一形换成对真站点逐条打 404（`tools/golden.mjs`、
+  `tools/scenarios.js`、`DESIGN.md`、`server.cjs` 都不在线上）。
 
 ---
 
