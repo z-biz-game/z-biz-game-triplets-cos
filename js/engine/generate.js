@@ -29,7 +29,7 @@ import { countByRegion, satisfies, DEFAULT_BUDGET, DEFAULT_CAP } from './counter
 import { solveWithRules, verify } from './pencil.js';
 
 // 出货尺寸：表里每一档都是**实测跑过**的档（npm run ceiling / npm run balance 打印读数）。
-// 12x12 是表内最外面那一档：实测能出货（墙钟 p50 ~0.5s、计数器结点离预算差三个数量级），
+// 12x12 是表内最外面那一档：实测能出货（墙钟 p95 两趟 504/332ms、计数器结点离预算差三个数量级），
 // 但同步出题的等待越过菜单红线 ⇒ 只当对照档量，不进菜单（判定与实测数见 tools/ceiling.mjs）。
 export const SIZE_TABLE = {
   '4x6': [4, 6],
@@ -58,7 +58,7 @@ export const TIERS = [
   { key: '8x9', inMenu: true, maxDraws: 40, unshippable: null },
   { key: '9x9', inMenu: true, maxDraws: 40, unshippable: null },
   { key: '8x12', inMenu: true, maxDraws: 40, unshippable: null },
-  { key: '12x12', inMenu: false, maxDraws: 40, unshippable: '墙钟 p95 504ms > 菜单线 300ms（npm run ceiling 实测 2026-09-28，load1 16.6：出货 6/6、单盘最大抽卡 2、OVERBUDGET 0）' },
+  { key: '12x12', inMenu: false, maxDraws: 40, unshippable: '墙钟 p95 504ms(load1 16.6)/332ms(load1 5.9) 两趟都 > 菜单线 300ms（npm run ceiling 2026-09-28，出货 6/6、单盘最大抽卡 2、OVERBUDGET 0）' },
 ];
 
 export function parseSize(sizeKey) {
