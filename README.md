@@ -7,7 +7,10 @@ Naoki Inaba 的三重子：盘面被切成一块块**恰好三格**的区域（�
 **本仓现在有引擎、门禁，还有一层第一次真跑过浏览器闸的壳**：第一阶段交付 `js/engine/`（六个模块）+ `tools/`（七套门禁）+
 `tests/`（三个从临时探针里救出来的证人）；第二阶段发的是 `index.html` + `js/{theme,store,main}.js` + `js/{render,ui}/` +
 `js/main.js` + `server.cjs` + `tools/{playtest.cjs,scenarios.js,golden.mjs,golden-test.mjs,verify.sh}`，端口对 5278/9378。
-Electron 壳与 CI/Pages 仍未开工，`package.json` 里也就没有它们的脚本和 devDependency——**没接线的东西不进清单**。
+第三阶段接的是两道门：`.github/workflows/ci.yml`（逻辑腿：语法门 + 七套 + golden + 难度梯子；浏览器腿：真指针七场，
+根形态与 Pages 前缀形态各一趟）与 `.github/workflows/pages.yml`（部署名单只有 `index.html`、`css/`、`js/`）。
+**这两个文件本轮刚落地，它们在 runner 上跑成什么样还没读回来——没读到的结论不写进这张表。**
+Electron 壳仍未开工，`package.json` 里也就没有它的脚本和 devDependency——**没接线的东西不进清单**。
 
 ---
 
@@ -175,12 +178,13 @@ RESULT ok=false                                                    # exit 1
 ## 跑测试
 
 ```
-npm run check      # 语法门：js/tools/tests 下 25 个 + server.cjs 过 node --check、verify.sh 过 bash -n（_tmp- 跳过）
+npm run check      # 语法门：js/tools/tests 下 27 个文件 + server.cjs 过 node --check、verify.sh 过 bash -n（_tmp- 跳过）
 npm test           # 逻辑门：4 套引擎门禁 + 3 套证人测试，合计 108654 条断言
 npm run balance    # 质量口径：SAMPLES=24 × 8 档 = 192 盘，末尾 RESULT ok=true
 npm run ceiling    # 成本口径：菜单 7 档 + 对照 12x12 + 探测 12x15/12x18
 npm run probe      # 只跑生成器自账核查（763 条）
 npm run golden     # 金标准核查（170 条）：七档题面 + 唯一解，浏览器三场与它逐字段对账
+npm run golden:remint  # 金标准的出处（9 条）：现在重铸七档夹具，与 tools/golden.mjs 冻结的那七条逐字节比
 npm start          # 本地站点：node server.cjs（5278；回源不含 tools/ 与 *.md）
 npm run verify     # 浏览器闸一把梭：语法门 + 七套单元 + 金标准 → 起站 → 真指针七场 → 截图
 ```
@@ -217,4 +221,5 @@ A5 的矛盾出口（铅笔说矛盾 ⇒ 独立计数器必须说 0 解）、C1 
   `counter.js`（自己内联一份几何）、`generate.js` / `partition.js`（知道答案）。
   任何"引擎说 OK 所以算通过"都不算判据，balance 一律独立复算。
 - 第二阶段（本轮已发货，端口对 5278/9378）：`index.html` + `css/` + `js/{theme,store,main}.js` + `js/render/` + `js/ui/`
-  + `server.cjs` + `tools/{playtest.cjs,scenarios.js,golden*.mjs,verify.sh}`；Electron 壳与 CI/Pages 未开工 ⇒ 不进清单。
+  + `server.cjs` + `tools/{playtest.cjs,scenarios.js,golden*.mjs,verify.sh}`；第三阶段接上 `.github/workflows/{ci,pages}.yml`；
+  Electron 壳未开工 ⇒ 不进清单（`package.json` 里连 `electron` 这个 keyword 也一并摘掉了）。

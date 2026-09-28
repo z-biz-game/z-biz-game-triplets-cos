@@ -18,8 +18,8 @@
 //
 // ⚠ fill 是**答案**。这整个文件住在 tools/ 下，而 .github/workflows/pages.yml 的 artifact
 //   只打包 index.html、css/、js/ —— 答案不进线上产物，界面上也没有一条路读得到它。
-//   数据段由 tools/_tmp-write-golden.mjs 那类一次性脚本重生成，只替换 BEGIN/END 之间；
-//   下面的 fingerprintOf / regOf / givensOf / fillOf 是人写的，不会被覆盖。
+//   数据段由 tools/write-golden.mjs 重生成（只替换 BEGIN/END 之间那几行；`--check` 会把现在铸出来的
+//   与下面这段逐字节比一次，CI 跑的就是它）。下面的 fingerprintOf / regOf / givensOf / fillOf 是人写的，不会被覆盖。
 
 export const GOLDEN_SCHEMA = 1;
 
@@ -61,7 +61,7 @@ export function puzzleOf(rec) {
   return { w: rec.w, h: rec.h, reg: regOf(rec), givens: givensOf(rec) };
 }
 
-// === GOLDEN-BEGIN（重生成时只替换这一段；来源 tools/_tmp-write-golden.mjs，2026-09-28 跑过）===
+// === GOLDEN-BEGIN（重生成时只替换这一段；来源 tools/write-golden.mjs，2026-09-28 跑过）===
 export const GOLDEN = [
   {"v":1,"key":"4x6","seed":"gold-4x6-3-0","w":4,"h":6,"reg":"117713376630260025442554","givens":".1.1...0..0....1.....0.2","fill":"112112100101121110221002","clues":7,"fp":"4x6|117713376630260025442554|.1.1...0..0....1.....0.2","draws":1},
   {"v":1,"key":"6x6","seed":"gold-6x6-3-0","w":6,"h":6,"reg":"3100073115573aa257ba2288b99968b44466","givens":"...1.2.2.......2............0.1.2.1.","fill":"121112122002100202202211011101122212","clues":8,"fp":"6x6|3100073115573aa257ba2288b99968b44466|...1.2.2.......2............0.1.2.1.","draws":1},

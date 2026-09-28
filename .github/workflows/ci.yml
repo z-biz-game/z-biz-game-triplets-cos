@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # 纯 Node 那三条腿：语法门 → 阶段一七套 → golden 对账。这一段在本地就是 tools/verify.sh 的
+  # 第 1 段，这里单独成一个 job 是为了让"引擎的门"和"浏览器的门"分开红——浏览器那趟在任何
+  # 机器上都是最慢、最容易因环境抖的一趟，把它和逻辑门捆在一起，红的时候分不清红在哪一边。
+  logic:
+    name: syntax + engine gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 没有 npm install：这仓零运行时依赖，装 Electron 只会让 CI 因为网络抖动而红。
+      - name: Syntax check every source
+        run: node tools/check.mjs
+
+      # 108654 条断言、七套，判定形状统一为 RESULT <名字> ok=… checks=… fails=…
+      # 套数不足七套当场算红（verify.sh 里那条 python 判据的同款理由：少跑一套是这一族门禁
+      # 最常见的腐化方式），所以这一步不许换成"只跑其中几套"。
+      # pipefail：`npm test | tee` 取的是 tee 的退出码，不加就是"npm 全红也照样往下跑"。
+      - name: Engine gates (7 suites)
+        run: |
+          set -eo pipefail
+          npm test 2>&1 | tee /tmp/npmtest.log
+          n=$(grep -cE '^RESULT' /tmp/npmtest.log)
+          echo "RESULT 行数 = $n（必须是 7）"
+          [ "$n" = 7 ]
+          grep -E '^RESULT' /tmp/npmtest.log
+          ! grep -qE 'ok=false|fails=[1-9]' /tmp/npmtest.log
+
+      - name: Golden fixture (170 checks)
+        run: node tools/golden-test.mjs
+
+      # 金标准的**出处**：把七档夹具现在重铸一遍，与仓里冻结的那七条逐字节比。
+      # golden-test 只证明冻结数据自洽（引擎复算对得上），这一条证明的是"它还铸得出来、
+      # 且没有人手改过数据段"。本机读数 0.19s、checks=9 fails=0。
+      - name: Golden fixture can still be re-minted
+        run: node tools/write-golden.mjs --check
+
+      # 难度梯子是一条承诺，不是一行说明文字：GATES 里那十条红线（tools/balance.mjs:305-319）
+      # 任何一条不认账就 RESULT ok=false + exit 1。这里跑的是全八档 × 24 盘 = 192 盘，
+      # 且不打 --quiet——CI 的日志要留下八档全表，红了才知道红在哪一档哪一条。
+      # ⚠ 墙钟那条红线（菜单档 p95 ≤ 300ms）在 runner 上测的数**不能和本机表对照**：本机那批
+      # 数全部带 load 争用，README 把它当上界读。这一步只认 RESULT 的结论。
+      # npm run ceiling 不在这里跑——它是量天花板的，不是门；写进 CI 就变成每天重测一次结论。
+      - name: Difficulty ladder is still measured
+        run: node tools/balance.mjs
+        env:
+          SAMPLES: "24"
+
+  # 真浏览器闸：headless Chrome + CDP，读 DOM 矩形/文本与画布像素，落子一律真指针事件，
+  # 不调引擎方法。两种 URL 形态各跑一遍：根形态（本机 npm start 的形状）和 Pages 的
+  # /<仓库名>/ 前缀形态。同组织已经因为只测根形态红过一次（部署站 404、本地闸全绿）。
+  browser:
+    name: real browser gate (both URL shapes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # 台架是裸 CDP 驱动，用的是 Node 22 才有的全局 WebSocket/fetch；在 20 上第一次 attach
+      # 就死在 "WebSocket is not defined"，一条断言都跑不到。
+      # verify.sh 自己起服、自己拉 Chrome（新的 --user-data-dir）、自己收尾；第 1 段跑语法门
+      # + 七套 + golden，第 3 段跑七场，第 5 段按 pages.yml 的名单在本地搭一个前缀根，
+      # 并断言 tools/ 与 *.md 在那个根下必须 404。
+      - name: Browser gate, root shape (+ local Pages-shaped prefix)
+        env:
+          WD_TIMEOUT: 1200
+          SHOTS: ci
+        run: bash tools/verify.sh
+
+      # 前缀形态这一趟用 python 起的静态服，绕开 server.cjs：线上服务字节的是 Pages 而不是
+      # 本仓那个 90 行的服务器，所以这里的"谁能访问"由 Pages 的名单决定（index.html|css|js）。
+      - name: Browser gate, prefix shape (how Pages serves us)
+        env:
+          WD_TIMEOUT: 1200
+          SKIP_UNIT: "1"
+        run: |
+          root=$(mktemp -d)
+          mkdir -p "$root/z-biz-game-triplets-cos"
+          cp -r index.html css js "$root/z-biz-game-triplets-cos/"
+          python3 -m http.server 5501 --bind 127.0.0.1 --directory "$root" &
+          SERVER=$!
+          trap 'kill $SERVER 2>/dev/null' EXIT
+          for i in $(seq 1 40); do
+            curl -fsS -m 2 "http://127.0.0.1:5501/z-biz-game-triplets-cos/" >/dev/null 2>&1 && break
+            sleep 0.25
+          done
+          curl -fsS -m 3 "http://127.0.0.1:5501/z-biz-game-triplets-cos/js/main.js" >/dev/null
+          curl -fsS -m 3 "http://127.0.0.1:5501/z-biz-game-triplets-cos/css/game.css" >/dev/null
+          BASE_URL=http://127.0.0.1:5501/z-biz-game-triplets-cos/ bash tools/verify.sh
+
+      # 复验截图是本仓的"我看过了"证据，失败时也要留下。tools/shots/ 在 .gitignore 里，
+      # 所以它是 CI 的产物而不是提交物。
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shots
+          path: tools/shots/
+          if-no-files-found: error

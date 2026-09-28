@@ -51,8 +51,9 @@ port_busy() {
 LOCAL=0
 case "$BASE" in "http://127.0.0.1:$HTTP/"*) LOCAL=1 ;; esac
 # 预检一：这两个号必须是空的。这个工作区里同时跑着好几个会话的 dev server 与 headless Chrome，
-# 曾经有一次 ALL GREEN 整局跑在隔壁会话留下的那个 Chrome 上（连视口形状都不是本站的）。
-# 宁可现在停下，也不要去猜那份 DOM 是谁的。
+# 而 $BASE 只说"有个东西在 5278 上"，不说它是不是本仓的：占了号的那位要是留着一个 Chrome，
+# 门禁就会在**别人家的 DOM** 上变绿——那条 ALL GREEN 连视口形状都不是本站的，却一条都不会红。
+# 宁可现在停下（exit 2），也不要去猜那份 DOM 是谁的。
 if [ "$LOCAL" = 1 ]; then
   for p in $HTTP $PORT; do
     if port_busy "$p"; then echo "port $p is already listening — refusing to guess whose DOM this is (free it or set HTTP_PORT/CDP_PORT)" >&2; exit 2; fi
@@ -238,8 +239,8 @@ fi
 #   · 前缀形状：相对路径必须一格不差，写死的 "/css/game.css" 会像在线上一样 404；
 #   · 部署名单形状：tools/golden.mjs（躺着每张出货盘的唯一解）根本不该被服务到。
 # 换根不换端口：还是那个 5278，所以本仓的端口对仍然只在三个地方各写一次。
-# ⚠ 这一趟是**本地按 pages.yml 的名单搭出来的同形状根**，不是线上站点：本轮还没有 Pages
-#   （.github/workflows/pages.yml 不在这一轮的范围里），所以「线上那趟」等于没跑，报告里要照说。
+# ⚠ 这一趟是**本地按 pages.yml 的名单搭出来的同形状根**，它替代不了线上那一趟：线上还差
+#   「真被 Pages 部署过的那份字节」这一层证据。第三形怎么跑见下面第 6 段。
 if [ "$LOCAL" = 1 ]; then
   echo "=== url-shape 2/3：Pages 前缀 /$REPO/ + 只发 index.html|css|js 的部署形状 ==="
   PROOT=$(mktemp -d)
@@ -306,10 +307,33 @@ if [ "$LOCAL" = 1 ]; then
   PROOT=""
 fi
 
-echo "=== url-shape 3/3：线上站点 —— 本轮没跑 ==="
-echo "  本仓还没有 Pages（.github/workflows/pages.yml 不在这一轮），所以没有 https://z-biz-game.github.io/$REPO/ 可打。"
-echo "  上面第 5 段跑的是**本地按部署名单搭出来的同形状根**（前缀 + tools/ 与 *.md 必须 404），"
-echo "  它替代不了线上那一趟：线上还差「真部署过的那份字节」这一层证据。"
+# ── 6. 第三个 URL 形态：线上站点（要网络，所以由调用方决定跑不跑）────────────────────
+LIVE=https://z-biz-game.github.io/$REPO/
+LIVELEG=0
+case "$BASE" in "$LIVE"*) LIVELEG=1 ;; esac
+if [ "$LIVELEG" = 1 ]; then
+  echo "=== url-shape 3/3：这一跑打的就是线上站点 $BASE ==="
+  echo "  上面那七场读的字节是 Pages 真部署过的那一份，不是工作区文件；"
+  echo "  第 5 段（本地替身根）按 LOCAL=0 跳过，它那些部署名单断言在这里换成对**线上**真打一次："
+  for miss in "${LIVE}tools/golden.mjs" "${LIVE}tools/scenarios.js" "${LIVE}DESIGN.md" "${LIVE}server.cjs"; do
+    CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 8 "$miss" 2>/dev/null)
+    if [ "$CODE" = 404 ]; then
+      echo "  ok  线上够不到 $miss（HTTP $CODE，答案与门禁脚本都不在部署名单里）"
+    else
+      echo "  FAIL 线上 $miss 返回 HTTP $CODE —— pages.yml 的名单漏了东西" >&2
+      FAILED=1
+      note fail "线上 $miss 竟然可达（$CODE）"
+    fi
+  done
+elif [ "$LOCAL" = 1 ]; then
+  echo "=== url-shape 3/3：线上站点 —— 这一跑没打 ==="
+  echo "  这一跑是本机根形态（七场 + 第 5 段的 Pages 前缀替身根）。线上那一趟要单独跑，网络另算："
+  echo "    BASE_URL=$LIVE bash tools/verify.sh"
+  echo "  那一趟没有本地替身根（LOCAL=0），读的是 Pages 真部署过的那份字节——第 5 段替代不了它。"
+else
+  echo "=== url-shape 3/3：既不是本机根，也不是线上站点（BASE_URL=$BASE）==="
+  echo "  这一跑按那个 BASE 的形态算（CI 的前缀腿用的就是这条路）：LOCAL=0，第 5 段跳过。"
+fi
 
 kill $WD 2>/dev/null
 [ $FAILED -eq 0 ] && echo "=== ALL GREEN ===" || echo "=== FAILURES ABOVE ==="

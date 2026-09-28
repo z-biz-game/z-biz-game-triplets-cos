@@ -1,0 +1,48 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # 没有构建步骤：仓库里跑的就是线上跑的（纯 ESM，无打包器），所以站点是一次文件拷贝。
+      # 名单只有这三样，而且是逐条对过的：index.html 里只引用 css/game.css 与 js/main.js
+      # （favicon 是内联 data: URI，没有别的资产），js/ 里没有任何动态 import。
+      # 用 `path: .` 会把 server.cjs、tools/（里面躺着 tools/golden.mjs = 每张出货盘的唯一解）、
+      # tests/ 和 *.md 一起传上去——tools/verify.sh 第 5 段那四条 404 断言拦的就是这个。
+      - name: Assemble static site
+        run: |
+          mkdir _site
+          cp index.html _site/
+          cp -r css js _site/
+      # configure-pages@v5：本仓此前没有 Pages 站点，这一步会顺手建一个。
+      # deploy-pages@v4 + upload-pages-artifact@v3 是配套的——早先用 deploy-pages@v3 时
+      # 出现过"CI 绿、站点 404"（取不到 artifact），同组织其他仓踩过。
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
