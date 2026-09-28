@@ -6,8 +6,8 @@
 // 为什么这一门要单独存在：另外四套测试跑的是逻辑，逻辑跑不起来常常只是因为某个文件写坏了语法；
 // 语法门先红，报告就直指文件名，而不是"导入时炸在第三个 await"。
 //
-// 本仓第一阶段没有 server.cjs / electron / shell 门禁脚本，所以那两个 EXTRA 列表是空的；
-// 第二阶段加浏览器壳时把文件名补进下面两个数组，别让它们逃过 check。
+// 第二阶段已经发了浏览器壳：server.cjs 住在**仓根**（DIRS 走不到它），tools/verify.sh 是 shell，
+// 所以它俩靠下面那两个数组点名。Electron 壳还没开工，它的入口不在这里，也不许写进来。
 import { readdirSync, statSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -18,8 +18,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // 语法门必须也走一遍这个目录，否则第一个红会变成"测试文件写坏了没人发现"。
 const DIRS = ['js', 'tools', 'tests'];
 const EXTS = ['.js', '.mjs', '.cjs'];
-const EXTRA_JS = []; // 第二阶段：'server.cjs'、'electron/main.cjs'、'electron/preload.cjs'、'tools/playtest.cjs'
-const SHELLS = []; // 第二阶段：'tools/verify.sh'
+const EXTRA_JS = ['server.cjs']; // 第二阶段：仓根的静态服务器不在 DIRS 里，必须点名（Electron 壳还没开工）
+const SHELLS = ['tools/verify.sh']; // 一把梭的门禁脚本：bash -n 先过，别让语法错活到运行时
 const SKIP = (name) => name.startsWith('_tmp-'); // 仓根的临时文件不许混进门禁
 
 function walk(dir, out) {
