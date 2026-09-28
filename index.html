@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<!-- 不写 <base>：页面既要在 http://host/ 下跑，也要在 GitHub Pages 的 /z-biz-game-triplets-cos/
+     前缀下跑。所有资源都用相对路径，动态 import 走 document.baseURI，硬编的 "/" 会在
+     前缀形状下把 css 和引擎全部 404 掉。 -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#070A14" />
+<title>同或异 · Triplets</title>
+<meta name="description" content="同或异 Triplets（Naoki Inaba）：盘面切成每块恰好三格的区域，每块要么三个同号、要么三个全异，跨区相邻的两格必须不同。出货的每一盘都由独立穷举计数器数过唯一解、铅笔求解器在零猜测下推得完，判胜只由引擎的 verify() 说了算。" />
+<!-- Inline icon: without it the browser probes the domain root for /favicon.ico and logs a 404. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23101828'/%3E%3Crect x='5' y='9' width='7' height='7' fill='%232ED573'/%3E%3Ccircle cx='16' cy='12.5' r='3.6' fill='%23F2F5FB'/%3E%3Cpath d='M25 8.6l4 7.4h-8z' fill='%23B8A88F'/%3E%3Cpath d='M4 21h24' stroke='%234E74C8' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="css/game.css" />
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>同或异</h1>
+      <p class="sub">Triplets · 三格区域的推理</p>
+    </div>
+    <div class="top-actions">
+      <span id="stat-face" class="chip mono" title="题面给的东西：几块三格区域、几颗预先填好的符号">区域 — · 线索 —</span>
+    </div>
+  </header>
+
+  <main>
+    <section id="view-game" class="view">
+      <div class="stage">
+        <div class="stage-head">
+          <label class="chip select-chip">尺寸
+            <select id="size-select" aria-label="盘面尺寸（只有引擎量进菜单的那七档）"></select>
+          </label>
+          <span id="stat-seed" class="chip mono" title="开局用的原始 seed：可以直接敲回来。同一个 seed 在 node 和 Chrome 里画同一张盘">seed —</span>
+          <span id="stat-time" class="chip mono" aria-label="本局耗时">00:00</span>
+        </div>
+
+        <div id="board-wrap">
+          <canvas id="board" tabindex="0" role="img"
+            aria-label="同或异盘面：粗蓝线框出的每一块是三格的区域，点格子落当前这支笔的符号；同区要么三同号要么三全异，跨区相邻的两格必须不同"
+            aria-describedby="state-line"></canvas>
+          <!-- 显式的 hidden 规则见 css/game.css 第一行：#win-veil 平时是 display:grid，
+               它会盖掉 UA 的 [hidden]，那块「藏起来」的卡片就会把整盘玩家的点击全接走。
+               场景量的是它的矩形和 elementFromPoint，不是这个属性。 -->
+          <div id="win-veil" hidden>
+            <div class="win-card">
+              <h3>填满了，而且每一块区域都服帖</h3>
+              <p id="win-meta" class="mono"></p>
+              <p class="win-note">这一句是 <code>js/engine/pencil.js</code> 的 <code>verify()</code> 说的，UI 自己没有记分板。</p>
+              <div class="win-actions">
+                <button id="btn-again" class="primary" type="button">换一局</button>
+                <button id="btn-close-veil" class="ghost" type="button">就看不动</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p id="state-line" class="state-line" aria-live="polite">选一支笔（■ ● ▲），点格子落子；同一格再点一次那支 ■ 就擦掉。</p>
+        <p id="sr-cell" class="sr-only" aria-live="polite"></p>
+      </div>
+
+      <aside class="panel">
+        <div class="modes" role="group" aria-label="画笔">
+          <button id="pen-square" class="ghost mode" type="button" data-pen="0" aria-pressed="true" title="方块 ■：落这一支笔">■ 方块</button>
+          <button id="pen-circle" class="ghost mode" type="button" data-pen="1" aria-pressed="false" title="圆圈 ●">● 圆圈</button>
+          <button id="pen-triangle" class="ghost mode" type="button" data-pen="2" aria-pressed="false" title="三角 ▲">▲ 三角</button>
+          <button id="pen-note" class="ghost mode" type="button" data-pen="note" aria-pressed="false" title="笔记：点一下把当前这个符号从本格候选里删掉，再点一下放回来">✎ 笔记 ■</button>
+          <button id="pen-erase" class="ghost mode" type="button" data-pen="erase" aria-pressed="false" title="擦掉：本格回到没落笔、候选全在">⌫ 擦掉</button>
+        </div>
+
+        <div class="acts">
+          <button id="btn-hint" class="ghost" type="button" title="问引擎要下一条被迫的结论：它落一笔（或删一个候选），并把那条规则的那句话说给你。推不动了就直说推不动。">提示</button>
+          <button id="btn-undo" class="ghost" type="button">撤销</button>
+          <button id="btn-clear" class="ghost" type="button">全清</button>
+          <button id="btn-new" class="primary" type="button">换一局</button>
+        </div>
+        <p class="rules-note">「提示」只给铅笔的下一条<b>被迫</b>结论（该落子就落子、该删候选就删候选），并把那条规则的原文印在上面那行里。铅笔推不动时它就说推不动——它不会替你猜，也没有一条路能读到答案。</p>
+
+        <div class="stats">
+          <div class="stat"><span>题面给的</span><b id="stat-givens" class="mono">0</b></div>
+          <div class="stat"><span>你填的</span><b id="stat-placed" class="mono">0</b></div>
+          <div class="stat"><span>删剩的候选</span><b id="stat-notes" class="mono">0</b></div>
+          <div class="stat"><span>还空着</span><b id="stat-blank" class="mono">0</b></div>
+          <div class="stat"><span>步数</span><b id="stat-moves" class="mono">0</b></div>
+          <div class="stat"><span>引擎说</span><b id="stat-verify" class="mono">—</b></div>
+        </div>
+
+        <div class="verify-box">
+          <h4>判胜只有一处</h4>
+          <p id="verify-line">「引擎说」那一格写的就是 <code>verify()</code> 的返回：它说还有格没定，画面再好看也没赢。</p>
+        </div>
+
+        <h3 class="col-title">这三条就是全部规则</h3>
+        <ol class="rules">
+          <li>盘面被切成一块块<b>恰好三格</b>的区域——区域是题面给的，粗蓝线就是它们的轮廓。</li>
+          <li>每块区域<b>要么三个同号、要么三个全异</b>，不存在「两个一样加一个不一样」。</li>
+          <li><b>跨区域相邻</b>（上下左右）的两格符号必须不同；同区相邻的两格不受这条管。没有别的规则。</li>
+        </ol>
+        <p class="rules-note">出货的每一盘都由引擎实测过：唯一可解（独立穷举计数器在预算内数出 1），而且铅笔在零猜测下推得完（判据见 <code>npm test</code> 与 <code>npm run balance</code>）。</p>
+
+        <div class="legend">
+          <span><i class="sw sw-border"></i>区域轮廓（跨区共边才画它）</span>
+          <span><i class="sw sw-grid"></i>同区共边（细线，不分组）</span>
+          <span><i class="sw sw-tint"></i>区域底纹（同一区三格同色）</span>
+          <span><i class="sw sw-given"></i>题面给的符号</span>
+          <span><i class="sw sw-player"></i>你（或提示）落下的符号</span>
+          <span><i class="sw sw-note"></i>删剩的候选（笔记）</span>
+        </div>
+        <p class="keyhint"><b>点格子</b> 落当前这支笔 · <b>右键</b> 擦掉这一格 · <b>1/2/3</b> 换 ■/●/▲ · <b>E</b> 轮笔（■●▲→笔记→擦掉） · <b>方向键</b> 移光标 · <b>回车</b> 落笔 · <b>退格</b> 擦光标格 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>N</b> 换一局</p>
+      </aside>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>盘面 = <code>makePuzzle()</code> 给的题面（<code>reg</code> + <code>givens</code>，不含答案）+ 铅笔状态里的那份候选数组 · 判胜 = <code>verify()</code> · 像素与模型的一致性由 <code>tools/verify.sh</code> 在真实 Chrome 里逐条量。</span>
+    <span id="stat-totals" class="chip mono" title="存档里的总成绩：开局数 / 赢过几盘 / 累计步数 / 用过几次提示">累计 —</span>
+    <button id="btn-reset" class="link" type="button">清空存档</button>
+  </footer>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

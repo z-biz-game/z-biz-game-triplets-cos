@@ -1,0 +1,302 @@
+/* 颜色、间距、时长全部来自 js/theme.js，经 applyThemeVars() 落成自定义属性；
+   这里除了几何没有第二个色值字面量。这就是让 canvas 和样式表不至于长成两个不同游戏的办法。 */
+
+/* [hidden] 必须带着 !important 站在这条规则的最前面：#win-veil 平时是 display:grid，
+   按层叠顺序它会盖掉 UA 的 [hidden]{display:none}，于是那块「藏起来」的胜利卡片还在画、
+   还在吃点击——它会盖住整个 #board-wrap，玩家点格子的每一笔都会被它接走。
+   工具链里所有隐藏层都靠这一条兜底，场景量的是它的矩形和 elementFromPoint 而不是这个属性。 */
+[hidden] { display: none !important; }
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 62%, var(--surface) 100%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body { touch-action: manipulation; }
+
+#app {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-page) var(--space-page) var(--space-inner);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-card);
+  min-height: 100vh;
+}
+
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* 只给读屏器看：不能 display:none（那等于从可访问树里删掉）。 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-card);
+}
+
+.brand h1 {
+  margin: 0;
+  font: 700 30px/1.1 var(--font-sans);
+  letter-spacing: 0.18em;
+}
+
+.brand .sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--ink-dim);
+}
+
+.top-actions { display: flex; gap: var(--space-gutter); }
+
+/* ---------- layout ---------- */
+
+.view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-card);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .view { grid-template-columns: minmax(0, 1fr); }
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inner);
+  align-items: center;
+}
+
+.stage-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-gutter);
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: var(--radius-chip);
+  background: var(--surface-lift);
+  border: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--ink-dim);
+}
+
+.select-chip { color: var(--ink); }
+.select-chip select {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  padding: 4px 8px;
+  font: 600 12.5px/1 var(--font-mono);
+}
+
+/* ---------- board ---------- */
+
+#board-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 240px;
+}
+
+#board {
+  display: block;
+  border-radius: var(--radius-card);
+  /* 关掉触摸板/触屏的默认手势，否则一次点按可能被浏览器当成滚动而吃掉 */
+  touch-action: manipulation;
+  cursor: crosshair;
+}
+
+.state-line {
+  margin: 0;
+  min-height: 20px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  text-align: center;
+  max-width: 660px;
+}
+
+.state-line.hint { color: var(--info); }
+.state-line.won { color: var(--success); }
+.state-line.bad { color: var(--error); }
+
+/* ---------- 胜利横幅：只有引擎的 verify 说 ok 才拿掉 hidden ---------- */
+
+#win-veil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(7, 10, 20, 0.62);
+  border-radius: var(--radius-card);
+}
+
+.win-card {
+  max-width: 400px;
+  padding: var(--space-card);
+  border-radius: var(--radius-card);
+  background: var(--surface-lift);
+  border: 1px solid var(--accent);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+  animation: pop var(--dur-win) var(--ease-ease);
+}
+
+@keyframes pop {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.win-card h3 { margin: 0 0 8px; font-size: 17px; letter-spacing: 0.04em; }
+.win-card p { margin: 0 0 10px; font-size: 13px; color: var(--ink-dim); line-height: 1.6; }
+.win-card code { font-family: var(--font-mono); font-size: 12px; color: var(--ink); }
+.win-actions { display: flex; gap: var(--space-gutter); }
+
+/* ---------- 右侧面板 ---------- */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inner);
+  padding: var(--space-card);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.modes { display: flex; gap: var(--space-gutter); flex-wrap: wrap; }
+
+.modes button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--surface-lift);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--accent-edge);
+}
+
+.acts { display: flex; gap: var(--space-gutter); flex-wrap: wrap; }
+
+button {
+  font: 600 13px/1 var(--font-sans);
+  padding: 10px 14px;
+  border-radius: var(--radius-button);
+  border: 1px solid var(--line);
+  background: var(--surface-lift);
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform var(--dur-base) var(--ease-ease), border-color var(--dur-base) var(--ease-ease);
+}
+
+button:hover { border-color: var(--accent); }
+button:active { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+button.primary { background: var(--accent); border-color: var(--accent-edge); color: #16130A; }
+button.ghost { background: transparent; }
+button.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--info);
+  text-decoration: underline;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-gutter);
+}
+
+.stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-chip);
+  background: var(--surface-lift);
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.stat b { font-size: 15px; color: var(--ink); }
+.stat b.good { color: var(--success); }
+.stat b.bad { color: var(--error); }
+
+.verify-box {
+  padding: 10px 12px;
+  border-radius: var(--radius-chip);
+  border: 1px solid var(--line);
+  background: rgba(123, 184, 255, 0.06);
+}
+
+.verify-box h4 { margin: 0 0 6px; font-size: 12.5px; letter-spacing: 0.06em; color: var(--info); }
+.verify-box p { margin: 0; font-size: 12px; line-height: 1.6; color: var(--ink-dim); }
+.verify-box code { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink); }
+
+.col-title { margin: 4px 0 0; font-size: 13px; letter-spacing: 0.08em; color: var(--ink); }
+
+.rules { margin: 0; padding-left: 20px; font-size: 12.5px; line-height: 1.7; color: var(--ink-dim); }
+.rules b { color: var(--ink); }
+.rules code { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink); }
+.rules-note { margin: 0; font-size: 11.5px; line-height: 1.6; color: var(--ink-faint); }
+.rules-note code { font-family: var(--font-mono); }
+
+.legend { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--ink-dim); }
+.legend span { display: flex; align-items: center; gap: 8px; }
+.sw { width: 20px; height: 5px; border-radius: 3px; display: inline-block; flex: none; }
+.sw-given { background: var(--given); height: 9px; width: 9px; border-radius: 2px; }
+.sw-player { background: var(--player); height: 9px; width: 9px; border-radius: 2px; }
+.sw-note { background: var(--note); height: 7px; width: 7px; border-radius: 50%; }
+.sw-border { background: var(--border); height: 5px; }
+.sw-grid { background: var(--grid-line); height: 5px; }
+.sw-tint { background: var(--tint-b); height: 9px; }
+.keyhint { margin: 0; font-size: 11.5px; line-height: 1.7; color: var(--ink-faint); }
+.keyhint b { color: var(--ink-dim); }
+
+/* ---------- footer ---------- */
+
+.foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-card);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
+.foot code { font-family: var(--font-mono); }
