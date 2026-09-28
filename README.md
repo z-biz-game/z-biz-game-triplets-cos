@@ -4,10 +4,10 @@ Naoki Inaba 的三重子：盘面被切成一块块**恰好三格**的区域（�
 每格放一个符号（方块 ■ / 圆圈 ● / 三角 ▲），每块区域要么**三个同号**、要么**三个全异**；
 跨过区域边界的相邻两格必须不同。没有全局约束——不要求连成环、不要求同号格连通。
 
-**本仓现在只有引擎和门禁**：第一阶段交付 `js/engine/`（六个模块）+ `tools/`（七套门禁）+
-`tests/`（三个从临时探针里救出来的证人）。**屏幕未实现**，`npm start` / Electron 壳都不存在，
-`package.json` 里也没有那两个脚本；连 Electron 的 devDependency 都没写——**没接线的东西不进清单**，
-壳和它的依赖第二阶段一起进。
+**本仓现在有引擎、门禁，还有一层第一次真跑过浏览器闸的壳**：第一阶段交付 `js/engine/`（六个模块）+ `tools/`（七套门禁）+
+`tests/`（三个从临时探针里救出来的证人）；第二阶段发的是 `index.html` + `js/{theme,store,main}.js` + `js/{render,ui}/` +
+`js/main.js` + `server.cjs` + `tools/{playtest.cjs,scenarios.js,golden.mjs,golden-test.mjs,verify.sh}`，端口对 5278/9378。
+Electron 壳与 CI/Pages 仍未开工，`package.json` 里也就没有它们的脚本和 devDependency——**没接线的东西不进清单**。
 
 ---
 
@@ -27,9 +27,9 @@ Naoki Inaba 的三重子：盘面被切成一块块**恰好三格**的区域（�
 
 ---
 
-## 怎么玩（引擎侧事实；屏幕未实现）
+## 怎么玩（引擎侧事实 + 浏览器壳的第一读数）
 
-界面还没做，所以这一节只写**已经能被门禁证明的事实**，不写操作手感：
+壳已经能跑（`npm start` 起站、`npm run verify` 一把梭），但这一节只写**能被门禁证明的事实**，不写操作手感：
 
 - 一盘题 = `{w, h, reg, givens}`：区域编号数组 + 给定符号数组（`-1` 是空格），
   见 `js/engine/generate.js:193-201` 的出货形状。
@@ -41,13 +41,13 @@ Naoki Inaba 的三重子：盘面被切成一块块**恰好三格**的区域（�
 - 一盘题的解是唯一的：出货前由独立穷举计数器 `countByRegion()` 在 250000 结点预算内数过。
 - 尺寸：菜单七档 `4x6 / 6x6 / 6x8 / 6x9 / 8x9 / 9x9 / 8x12`（`generate.js:48`），
   点一次"换一局"要抽几张卡：实测每档 p50 = 1、菜单档 max = 1（12×12 对照档 max = 3）。
+- 浏览器闸（`npm run verify`）的第一读数：七场全绿、合计 90 条、fails=0；URL 三形只跑了本地根与 Pages 前缀两形。
 
 ---
 
 ## 四条承诺怎么变成一条会红的命令
 
-四条承诺：出货、唯一解、零猜测推得完、每颗线索都删不得。它们不许是 README 里的形容词，
-必须能被一条命令咬住：
+四条承诺：出货、唯一解、零猜测推得完、每颗线索都删不得。它们不许是 README 里的形容词，必须能被一条命令咬住：
 
 ```
 SAMPLES=24 node tools/balance.mjs        # 打印八档全表 + 末尾 RESULT ok=true|false
@@ -70,8 +70,7 @@ node tools/balance.mjs --quiet           # 只打 RESULT 那一行（门禁用�
   这个数字**不支持**"零猜测筛掉了大量题面"那句话。有信息量的是挖那一步的淘汰率：
   每颗候选线索单独摘一遍，铅笔拒绝 0.3%～1.7%（`SAMPLES=24` 各档：4x6 2/576 = 0.3% → 12x12 59/3456 = 1.7%），
   计数器拒绝才是主力（同口径从 4x6 的 178/576 = 30.9% 一路降到 12x12 的 584/3456 = 16.9%；
-  **菜单档里最低的是 8x12 的 437/2304 = 19.0%**）。balance 把这两个数都印出来，
-  README 不许只写前者。
+  **菜单档里最低的是 8x12 的 437/2304 = 19.0%**）。balance 把这两个数都印出来，README 不许只写前者。
 - **"每颗线索都删不得"是本仓跟 masyu / slither 拉开区别的那一句，但它有精确的形状：**
   它是**单颗删除意义上的极小**——每颗留下的线索都被单独摘掉试过一遍，摘掉以后
   「计数器不唯一」或「铅笔推不完」至少有一条拦住；它**不是**"线索数最少"，
@@ -96,7 +95,7 @@ node tools/balance.mjs --quiet           # 只打 RESULT 那一行（门禁用�
   六条规则轮询一圈零步推进、独立计数器却说这盘有多个解（"六条规则、零步、计数器说 3 解"那一档）。
   唯一性是计数器的承诺，可解性是规则表 × 那盘题的偶合，两者之间没有蕴含关系。
 - **不承诺"线索最少"。** 挖线索是按预抽格序的单趟贪心删除，极小性只到"单颗摘除"这一层。
-- **不承诺界面。** 第二阶段才做渲染、输入、存档；现在没有 `index.html`、没有 `server.cjs`、没有端口对。
+- **不承诺界面。** 浏览器壳已发货，但这里只承诺浏览器闸咬得住的事实（`npm run verify`），不承诺手感与美术。
 - **不承诺 12×12 以上能出货。** 那是量出来的失败：`npm run ceiling` 本轮实测
   12×12 墙钟 p95 504ms（越过菜单线 300ms）、12×15 p95 1460ms、12×18 p95 2534ms（越过出货线 2000ms）。
   15×15 / 12×21 / 18×18 只在 `CEIL_ALL=1` 时量，本轮没跑完 ⇒ **不写进表、不写进承诺**。
@@ -176,26 +175,27 @@ RESULT ok=false                                                    # exit 1
 ## 跑测试
 
 ```
-npm run check      # 语法门：js/、tools/、tests/ 下 16 个文件过 node --check，_tmp- 前缀一律跳过
+npm run check      # 语法门：js/tools/tests 下 25 个 + server.cjs 过 node --check、verify.sh 过 bash -n（_tmp- 跳过）
 npm test           # 逻辑门：4 套引擎门禁 + 3 套证人测试，合计 108654 条断言
 npm run balance    # 质量口径：SAMPLES=24 × 8 档 = 192 盘，末尾 RESULT ok=true
 npm run ceiling    # 成本口径：菜单 7 档 + 对照 12x12 + 探测 12x15/12x18
 npm run probe      # 只跑生成器自账核查（763 条）
+npm run golden     # 金标准核查（170 条）：七档题面 + 唯一解，浏览器三场与它逐字段对账
+npm start          # 本地站点：node server.cjs（5278；回源不含 tools/ 与 *.md）
+npm run verify     # 浏览器闸一把梭：语法门 + 七套单元 + 金标准 → 起站 → 真指针七场 → 截图
 ```
 
 本轮 `npm test` 的逐套条数（全部 `fails=0`）：
 `rule-test` 259 · `pencil-test` 56545 · `counter-test` 39067 · `generator-probe` 763
 · `a5-contradiction-test` 11935 · `c1-irreducible-test` 65 · `rule-subsumption-test` 20。
 `tests/` 那三套是把原先只活在 `tools/_tmp-*fixture*.mjs` 里的证人固化下来的：
-A5 的矛盾出口（铅笔说矛盾 ⇒ 独立计数器必须说 0 解）、
-C1 的不可删性（四张 4x6 出货盘的金标准夹具 `smoke|4x6|3|4|9|10`）、
+A5 的矛盾出口（铅笔说矛盾 ⇒ 独立计数器必须说 0 解）、C1 的不可删性（四张 4x6 出货盘的金标准夹具 `smoke|4x6|3|4|9|10`）、
 规则表的互不蕴含（C1 ⊄ A 组 74835 局、A2 与 A4 互相不被蕴含）。
 
 纯 Node，无依赖、无网络、无浏览器。任何判据路径都不许出现 `Math.random` / `Date.now` /
 `loadavg`：随机只发生在"选 seed"这一步，洗牌的随机数在 `rng.js:32-39` 一次性抽完，
 比较器里不抽随机数（`rng.js:43` 的 `keyed()` 给需要"随机序 + 稳定断键"的场合预抽键），
-否则 node 和 Chrome 会画出两张盘。`loadavg` 只出现在 balance / ceiling 的抬头行——那是披露争用，
-不参与任何判定。
+否则 node 和 Chrome 会画出两张盘。`loadavg` 只出现在 balance / ceiling 的抬头行——那是披露争用、不参与任何判定。
 
 ---
 
@@ -210,11 +210,11 @@ C1 的不可删性（四张 4x6 出货盘的金标准夹具 `smoke|4x6|3|4|9|10`
   - `pencil.js` 六条具名规则的无回溯铅笔求解器 + `verify()`
   - `generate.js` 出货流水线：剖分 → 参考解 → 满线索门 0 → 挖线索（逐颗试删：计数器唯一 ∧ 铅笔推完）
     → 出货前独立复核 → `auditClueNecessity()` 给 balance 复算
-- `tools/`（7）`check.mjs`、`rule-test.mjs`、`pencil-test.mjs`、`counter-test.mjs`、
+- `tools/`（阶段一 7 套）`check.mjs`、`rule-test.mjs`、`pencil-test.mjs`、`counter-test.mjs`、
   `generator-probe.mjs`、`balance.mjs`、`ceiling.mjs`；另有 `generator-probe` 的探针口径说明在文件头
 - `tests/`（3）证人测试，`npm test` 跑，输出同样是 `RESULT <名字> ok=… checks=… fails=…`
 - 判据形状统一：三方互相不信任——`pencil.js`（自己内联一份几何，不 import counter / partition）、
   `counter.js`（自己内联一份几何）、`generate.js` / `partition.js`（知道答案）。
   任何"引擎说 OK 所以算通过"都不算判据，balance 一律独立复算。
-- 第二阶段（未开工）：`index.html` + `server.cjs` + Electron 壳 + `tools/verify.sh`（浏览器门禁）。
-  现在没有那些东西，所以现在没有端口对。
+- 第二阶段（本轮已发货，端口对 5278/9378）：`index.html` + `css/` + `js/{theme,store,main}.js` + `js/render/` + `js/ui/`
+  + `server.cjs` + `tools/{playtest.cjs,scenarios.js,golden*.mjs,verify.sh}`；Electron 壳与 CI/Pages 未开工 ⇒ 不进清单。
