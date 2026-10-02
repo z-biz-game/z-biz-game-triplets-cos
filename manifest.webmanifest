@@ -1,0 +1,27 @@
+{
+  "name": "同或异 · Triplets",
+  "short_name": "同或异",
+  "description": "三格区域的推理：每块区域要么三个同号、要么三个全异，跨区相邻的两格必须不同。出货的每一盘都由独立穷举计数器数过唯一解。",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#070A14",
+  "theme_color": "#070A14",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "categories": ["games", "puzzle"],
+  "icons": [
+    { "src": "./icons/favicon-32.png", "sizes": "32x32", "type": "image/png" },
+    { "src": "./icons/icon-96.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "./icons/icon-1024.png", "sizes": "1024x1024", "type": "image/png" },
+    { "src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "./assets/img/og-image.png", "sizes": "1200x630", "type": "image/png", "form_factor": "wide", "label": "同或异的一盘：粗蓝线是区域轮廓，■ ● ▲ 是三种符号" }
+  ]
+}

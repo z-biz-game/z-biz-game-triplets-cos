@@ -91,8 +91,10 @@ jobs:
           SKIP_UNIT: "1"
         run: |
           root=$(mktemp -d)
-          mkdir -p "$root/z-biz-game-triplets-cos"
-          cp -r index.html css js "$root/z-biz-game-triplets-cos/"
+          mkdir -p "$root/z-biz-game-triplets-cos/assets"
+          cp index.html manifest.webmanifest sw.js "$root/z-biz-game-triplets-cos/"
+          cp -r css js icons "$root/z-biz-game-triplets-cos/"
+          cp -r assets/textures assets/img "$root/z-biz-game-triplets-cos/assets/"
           python3 -m http.server 5501 --bind 127.0.0.1 --directory "$root" &
           SERVER=$!
           trap 'kill $SERVER 2>/dev/null' EXIT
@@ -102,6 +104,11 @@ jobs:
           done
           curl -fsS -m 3 "http://127.0.0.1:5501/z-biz-game-triplets-cos/js/main.js" >/dev/null
           curl -fsS -m 3 "http://127.0.0.1:5501/z-biz-game-triplets-cos/css/game.css" >/dev/null
+          # 名单里少一样，这一腿就会在这里断掉，而不是等到线上装不上时才由玩家发现。
+          curl -fsS -m 3 "http://127.0.0.1:5501/z-biz-game-triplets-cos/manifest.webmanifest" >/dev/null
+          curl -fsS -m 3 "http://127.0.0.1:5501/z-biz-game-triplets-cos/sw.js" >/dev/null
+          curl -fsS -m 3 "http://127.0.0.1:5501/z-biz-game-triplets-cos/icons/icon-192.png" >/dev/null
+          curl -fsS -m 3 "http://127.0.0.1:5501/z-biz-game-triplets-cos/assets/textures/grain-256.png" >/dev/null
           BASE_URL=http://127.0.0.1:5501/z-biz-game-triplets-cos/ bash tools/verify.sh
 
       # 复验截图是本仓的"我看过了"证据，失败时也要留下。tools/shots/ 在 .gitignore 里，

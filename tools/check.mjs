@@ -18,7 +18,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // 语法门必须也走一遍这个目录，否则第一个红会变成"测试文件写坏了没人发现"。
 const DIRS = ['js', 'tools', 'tests'];
 const EXTS = ['.js', '.mjs', '.cjs'];
-const EXTRA_JS = ['server.cjs']; // 第二阶段：仓根的静态服务器不在 DIRS 里，必须点名（Electron 壳还没开工）
+const EXTRA_JS = ['server.cjs', 'sw.js']; // 第二阶段：仓根的静态服务器不在 DIRS 里，必须点名；离线壳 sw.js 同理（Electron 壳还没开工，不许写进来）
 const SHELLS = ['tools/verify.sh']; // 一把梭的门禁脚本：bash -n 先过，别让语法错活到运行时
 const SKIP = (name) => name.startsWith('_tmp-'); // 仓根的临时文件不许混进门禁
 

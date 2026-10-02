@@ -13,9 +13,13 @@ const TYPES = {
   '.cjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  // Chrome 按 Content-Type 决定这份 JSON 能不能当清单用；发成 octet-stream 就是
+  // 「装了 manifest 标签也不给安装」那种最难查的坑。
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
+  '.webp': 'image/webp',
 };
 
 function createServer(root = __dirname) {

@@ -1,0 +1,90 @@
+{
+  "cjk_text": "YES",
+  "files": {
+    "assets/img/og-image.png": {
+      "bytes": 71912,
+      "h": 630,
+      "role": "og:image / twitter:image 社交卡 1200×630",
+      "sha256": "22a9d35452c36ae91459bb087fe091e9127c18303e7bffaaff2e5d874b6e4989",
+      "w": 1200
+    },
+    "assets/img/triad-sprite.png": {
+      "bytes": 2302,
+      "h": 192,
+      "role": "游戏内 sprite：576×192 三帧（■ ● ▲），HUD 笔指示器",
+      "sha256": "a456faa460aa0e34e4cdc07c7948d7b87cb6a6b1df1b89957108b117c69fa0cb",
+      "w": 576
+    },
+    "assets/textures/grain-256.png": {
+      "bytes": 14831,
+      "h": 256,
+      "role": "游戏内纹理：body/panel 的噪声层（可平铺，接缝不存在）",
+      "sha256": "4d04a85c9bfa921d41e3cdbc42bef5e1806538c5fe98c655d01b9600cb66656a",
+      "w": 256
+    },
+    "icons/apple-touch-icon.png": {
+      "bytes": 10466,
+      "h": 180,
+      "role": "iOS apple-touch-icon 180",
+      "sha256": "5b41f68b9d4b09103de7a55b72a6de3b6151669cfad3c9a6d2678921a47974af",
+      "w": 180
+    },
+    "icons/favicon-16.png": {
+      "bytes": 699,
+      "h": 16,
+      "role": "favicon 16",
+      "sha256": "c2bdf12ac97f0e9c2eb7410851edaa8a123873b57378ca7b8abf6419ccf066fa",
+      "w": 16
+    },
+    "icons/favicon-32.png": {
+      "bytes": 1576,
+      "h": 32,
+      "role": "favicon 32",
+      "sha256": "3abfc997d55c7d658568ddc0c2dd918fbd75f6ba66ab4b8508f7a1db0f8e1e6f",
+      "w": 32
+    },
+    "icons/icon-1024.png": {
+      "bytes": 69160,
+      "h": 1024,
+      "role": "母图 1024（商店/物料源图）",
+      "sha256": "995415c653d5978bf3975b010f5bf49ea76a8008ac031b71c7a8ead24ddf4aa3",
+      "w": 1024
+    },
+    "icons/icon-192.png": {
+      "bytes": 10966,
+      "h": 192,
+      "role": "PWA icon 192（purpose any）",
+      "sha256": "5ebf0fcd049f32b44e74136e02fa0346f0c84fdc2e887e0f508330ed1822c0b8",
+      "w": 192
+    },
+    "icons/icon-512.png": {
+      "bytes": 33282,
+      "h": 512,
+      "role": "PWA icon 512（purpose any）",
+      "sha256": "8ca296882741a2fe999a0a4386ae0297a61d0ff8ac7516036ba5d3e4031a22c2",
+      "w": 512
+    },
+    "icons/icon-96.png": {
+      "bytes": 5205,
+      "h": 96,
+      "role": "桌面/任务栏 96",
+      "sha256": "8029dbf08fedad6efa2d0e7987bda2d5904b81103edb549f557aa658a5efbc8f",
+      "w": 96
+    },
+    "icons/icon-maskable-512.png": {
+      "bytes": 9106,
+      "h": 512,
+      "role": "PWA icon 512（purpose maskable，母题收进 80% 安全区）",
+      "sha256": "378a56d86e3210eb99a80a0ad9f8f1b4f73c559eee21e1734cbf315d00f1ba50",
+      "w": 512
+    }
+  },
+  "fonts": [
+    "/System/Library/Fonts/Hiragino Sans GB.ttc",
+    "/System/Library/Fonts/Hiragino Sans GB.ttc",
+    "/System/Library/Fonts/Menlo.ttc"
+  ],
+  "generator": "assets/gen/gen_art.py",
+  "palette_source": "js/theme.js Palette",
+  "supersample": 4
+}

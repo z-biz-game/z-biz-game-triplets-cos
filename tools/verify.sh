@@ -235,19 +235,27 @@ if [ -n "${SHOTS:-}" ]; then
 fi
 
 # ── 5. 另外两个 URL 形态 ─────────────────────────────────────────────────────────────
-# Pages 会把部署目录挂在 /<仓库名>/ 下面，而且**只发 index.html、css/、js/**：
+# Pages 会把部署目录挂在 /<仓库名>/ 下面，而且**只发 pages.yml 名单里那几样**
+# （index.html、manifest.webmanifest、sw.js、css/、js/、icons/、assets/textures+img）：
 #   · 前缀形状：相对路径必须一格不差，写死的 "/css/game.css" 会像在线上一样 404；
 #   · 部署名单形状：tools/golden.mjs（躺着每张出货盘的唯一解）根本不该被服务到。
 # 换根不换端口：还是那个 5278，所以本仓的端口对仍然只在三个地方各写一次。
 # ⚠ 这一趟是**本地按 pages.yml 的名单搭出来的同形状根**，它替代不了线上那一趟：线上还差
 #   「真被 Pages 部署过的那份字节」这一层证据。第三形怎么跑见下面第 6 段。
 if [ "$LOCAL" = 1 ]; then
-  echo "=== url-shape 2/3：Pages 前缀 /$REPO/ + 只发 index.html|css|js 的部署形状 ==="
+  echo "=== url-shape 2/3：Pages 前缀 /$REPO/ + 按 pages.yml 名单搭出来的部署形状 ==="
   PROOT=$(mktemp -d)
   mkdir -p "$PROOT/$REPO"
   ln -s "$HERE/index.html" "$PROOT/$REPO/index.html"
   ln -s "$HERE/css" "$PROOT/$REPO/css"
   ln -s "$HERE/js" "$PROOT/$REPO/js"
+  ln -s "$HERE/manifest.webmanifest" "$PROOT/$REPO/manifest.webmanifest"
+  ln -s "$HERE/sw.js" "$PROOT/$REPO/sw.js"
+  ln -s "$HERE/icons" "$PROOT/$REPO/icons"
+  # 和 pages.yml 同形状：assets/ 只挂站点真正要用的 textures 与 img，gen/（Python 生成器）不发。
+  mkdir -p "$PROOT/$REPO/assets"
+  ln -s "$HERE/assets/textures" "$PROOT/$REPO/assets/textures"
+  ln -s "$HERE/assets/img" "$PROOT/$REPO/assets/img"
   PRE="http://127.0.0.1:$HTTP/$REPO/"
   kill $SPID 2>/dev/null
   SPID=0
@@ -262,7 +270,7 @@ if [ "$LOCAL" = 1 ]; then
   case "$PRESERVED" in *js/main.js*) ;; *) echo "  FAIL 前缀形状下拿不到本仓 index.html：$PRE（见 /tmp/triplets-prefix-server.log）" >&2; FAILED=1 ;; esac
   # 反证：部署名单里没有 tools/，所以答案文件在线上必须够不到。本地替它兜底就等于门禁在
   # 给被测对象自己打的补丁做见证，那这条腿永远红不了。
-  for miss in "$PRE"tools/golden.mjs "$PRE"tools/scenarios.js "http://127.0.0.1:$HTTP/tools/golden.mjs" "$PRE"DESIGN.md; do
+  for miss in "$PRE"tools/golden.mjs "$PRE"tools/scenarios.js "http://127.0.0.1:$HTTP/tools/golden.mjs" "$PRE"DESIGN.md "$PRE"assets/gen/gen_art.py; do
     CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 3 "$miss" 2>/dev/null)
     if [ "$CODE" = 404 ]; then
       echo "  ok  够不到 $miss（HTTP $CODE，答案与门禁脚本都不在线上产物里）"
@@ -270,6 +278,18 @@ if [ "$LOCAL" = 1 ]; then
       echo "  FAIL $miss 返回 HTTP $CODE —— 部署名单漏了东西，答案或门禁被服务出去了" >&2
       FAILED=1
       note fail "部署形状下 $miss 竟然可达（$CODE）"
+    fi
+  done
+  # 正向那半：名单里的 PWA 与位图必须真在前缀下够得到。manifest 404 = 装了标签也不给安装，
+  # 纹理 404 = 页面掉成纯黑，图标 404 = 添加到主屏拿到一个占位方块——三种都静默，不报错。
+  for hit in manifest.webmanifest sw.js icons/icon-192.png assets/textures/grain-256.png assets/img/og-image.png js/main.js; do
+    CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 3 "$PRE$hit" 2>/dev/null)
+    if [ "$CODE" = 200 ]; then
+      echo "  ok  前缀下发得出 $hit"
+    else
+      echo "  FAIL $hit 在前缀形状下返回 HTTP $CODE —— 部署名单少了这一样" >&2
+      FAILED=1
+      note fail "部署形状下 $hit 发不出去（$CODE）"
     fi
   done
   if [ -n "$PRESERVED" ]; then
@@ -301,7 +321,10 @@ if [ "$LOCAL" = 1 ]; then
     BASE_URL=$PRE node tools/playtest.cjs scenario boot 2>/tmp/triplets-prefix-boot.console.log | tail -1 | sed 's/^RESULT //' | parse_row "prefix-boot" || FAILED=1
     export BASE_URL=$BASE
   fi
-  rm -f "$PROOT/$REPO/index.html" "$PROOT/$REPO/css" "$PROOT/$REPO/js"
+  rm -f "$PROOT/$REPO/index.html" "$PROOT/$REPO/css" "$PROOT/$REPO/js" \
+    "$PROOT/$REPO/manifest.webmanifest" "$PROOT/$REPO/sw.js" "$PROOT/$REPO/icons" \
+    "$PROOT/$REPO/assets/textures" "$PROOT/$REPO/assets/img"
+  rmdir "$PROOT/$REPO/assets" 2>/dev/null
   rmdir "$PROOT/$REPO" "$PROOT" 2>/dev/null
   # 符号链接交回给系统：$PROOT 已经空了，清掉之后 cleanup 那一趟就不必再碰它。
   PROOT=""

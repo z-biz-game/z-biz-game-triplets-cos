@@ -12,8 +12,16 @@
 html, body {
   margin: 0;
   min-height: 100%;
-  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 62%, var(--surface) 100%);
-  background-attachment: fixed;
+  /* 第一层是盘外那圈噪声（assets/textures/grain-256.png，python3 assets/gen/gen_art.py 铸的
+     可平铺纹理：3×3 复制后模糊再取中间那块，所以接缝不存在），第二层才是主题渐变。
+     纹理只吃 CSS 这一侧，一像素都不进画布——画布上那九种颜色是被门禁逐条对色取样的。 */
+  background-image: url('../assets/textures/grain-256.png'),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 62%, var(--surface) 100%);
+  background-repeat: repeat, no-repeat;
+  background-size: 256px 256px, cover;
+  background-position: 0 0, 0 0;
+  background-attachment: fixed, fixed;
+  background-color: var(--bg-top);
   color: var(--ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -24,7 +32,12 @@ body { touch-action: manipulation; }
 #app {
   max-width: 1120px;
   margin: 0 auto;
-  padding: var(--space-page) var(--space-page) var(--space-inner);
+  /* 刘海/圆角/home 指示条：viewport-fit=cover 让 env() 真的有值，max() 保证设计间距不被吃掉。 */
+  padding:
+    max(var(--space-page), env(safe-area-inset-top))
+    max(var(--space-page), env(safe-area-inset-right))
+    max(var(--space-inner), env(safe-area-inset-bottom))
+    max(var(--space-page), env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   gap: var(--space-card);
@@ -53,7 +66,36 @@ body { touch-action: manipulation; }
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-card);
+  /* 横屏 iPhone 的刘海在左右两边：topbar 是第一个吃 env() 的人。 */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inner);
+}
+
+/* 品牌指示器：一张 576×192 的三帧 sprite（■ ● ▲），换笔只改 data-frame。
+   background-size 300% 100% ⇒ 三帧横排、每次露出 1/3；取帧靠百分比而不是负偏移，
+   这样 --brand-size 改成多少都不会切到邻居那一帧。 */
+.brand-mark {
+  width: var(--brand-size, 46px);
+  height: var(--brand-size, 46px);
+  flex: none;
+  background-image: url('../assets/img/triad-sprite.png');
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  background-position: 0% 50%;
+  border-radius: var(--radius-button);
+}
+
+.brand-mark[data-frame='1'] { background-position: 50% 50%; }
+.brand-mark[data-frame='2'] { background-position: 100% 50%; }
+.brand-mark[data-dim='1'] { opacity: 0.5; }
+
+.brand-text { min-width: 0; }
 
 .brand h1 {
   margin: 0;
@@ -68,7 +110,62 @@ body { touch-action: manipulation; }
   color: var(--ink-dim);
 }
 
-.top-actions { display: flex; gap: var(--space-gutter); }
+.top-actions {
+  display: flex;
+  gap: var(--space-gutter);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+/* ---------- 命中区下限（拇指也是输入设备）-------------------------------------------
+   44px 是 iOS HIG 与 Material 的下限，这里把它钉成一条规则而不是逐个按钮凑数：
+   按钮、下拉、以及 HUD 那三枚 chip 状按钮都吃它；移动端再抬到 48px。
+   ⚠ 画布上那一格的边长另有其尺（js/theme.js 的 Board.cellMin=34，被 boot 的命中盒场景
+   逐格量过：每格正中/四对角/四内缩角都点得到自己），它不在 CSS 这条规则的范围里。 */
+button,
+select,
+.hud-btn,
+.modes button,
+.acts button {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.select-chip select { min-height: 44px; }
+
+@media (max-width: 720px) {
+  button,
+  select,
+  .hud-btn {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  .brand h1 { font-size: 24px; letter-spacing: 0.12em; }
+  .topbar { align-items: flex-start; flex-wrap: wrap; }
+}
+
+/* 暂停指示：只在按下去之后出现，pointer-events 关掉，免得它把盘上那一笔接走。 */
+.paused-chip {
+  color: var(--accent);
+  border-color: var(--accent-edge);
+  background: var(--surface-lift);
+  pointer-events: none;
+}
+
+.hud-btn[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--ink);
+  background: var(--surface-lift);
+}
+
+/* 光晕由 js/fx.js 每帧写 --fx-glow（0..1）：它是**吃了帧 dt 的**积分钟推出来的量，
+   所以 30/60/120Hz 上同一虚拟时长看到的强度一样。只吃 DOM，一像素都不进画布。 */
+#board-wrap { --fx-glow: 0; }
+
+#board {
+  box-shadow: 0 0 calc(6px + var(--fx-glow) * 26px) rgba(123, 184, 255, calc(0.10 + var(--fx-glow) * 0.34));
+}
 
 /* ---------- layout ---------- */
 
@@ -300,3 +397,37 @@ button.link {
 }
 
 .foot code { font-family: var(--font-mono); }
+
+/* ---------- 全屏与沉浸式 ----------------------------------------------------------------
+   :fullscreen 的根节点丢掉页面渐变（UA 会铺黑），所以补一层同款底色；同时把宽度上限放开，
+   让 12×12 那一档在横屏上多要几十像素的格子边长。全屏按钮绑的是 index.html 里真存在的
+   #btn-fullscreen，退出走 fullscreenchange 同步 aria-pressed，不靠猜。 */
+#app:fullscreen,
+#app:-webkit-full-screen {
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 62%, var(--surface) 100%);
+  max-width: none;
+  overflow: auto;
+}
+
+/* 全屏时系统状态条没了，但 home 指示条还在：env() 继续算数。 */
+.foot {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.panel,
+.stage {
+  padding-left: max(var(--space-card), env(safe-area-inset-left));
+  padding-right: max(var(--space-card), env(safe-area-inset-right));
+}
+
+/* ---------- prefers-reduced-motion ------------------------------------------------------
+   这不是装饰性的一条：js/fx.js 里的光晕、胜利卡片的弹入、按钮的按压位移都会被关掉，
+   标题态退化成静图。JS 侧还有同一个判据（theme.js 的 prefersReducedMotion()），两边
+   各关各的：CSS 管它自己的动画，JS 管它自己每帧写进 --fx-glow 的那一笔。 */
+@media (prefers-reduced-motion: reduce) {
+  #board { box-shadow: 0 0 8px rgba(123, 184, 255, 0.12); }
+  .win-card { animation: none; }
+  button { transition: none; }
+  button:active { transform: none; }
+  * { scroll-behavior: auto; }
+}

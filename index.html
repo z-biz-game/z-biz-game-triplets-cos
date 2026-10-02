@@ -9,19 +9,53 @@
 <meta name="theme-color" content="#070A14" />
 <title>同或异 · Triplets</title>
 <meta name="description" content="同或异 Triplets（Naoki Inaba）：盘面切成每块恰好三格的区域，每块要么三个同号、要么三个全异，跨区相邻的两格必须不同。出货的每一盘都由独立穷举计数器数过唯一解、铅笔求解器在零猜测下推得完，判胜只由引擎的 verify() 说了算。" />
-<!-- Inline icon: without it the browser probes the domain root for /favicon.ico and logs a 404. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23101828'/%3E%3Crect x='5' y='9' width='7' height='7' fill='%232ED573'/%3E%3Ccircle cx='16' cy='12.5' r='3.6' fill='%23F2F5FB'/%3E%3Cpath d='M25 8.6l4 7.4h-8z' fill='%23B8A88F'/%3E%3Cpath d='M4 21h24' stroke='%234E74C8' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E" />
+<!-- 图标是盘上的真位图（python3 assets/gen/gen_art.py 铸的，tools/check-assets.mjs 逐张验
+     PNG 签名/IHDR/sha256）。以前这里是一张内联 SVG：既装不到桌面，也上不了商店截图，
+     而且浏览器仍会去摸 /favicon.ico 报 404。 -->
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="96x96" href="icons/icon-96.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="同或异" />
+<!-- og:image 要绝对地址：社交爬虫不会拿页面 URL 去解析相对路径。 -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="同或异 Triplets" />
+<meta property="og:title" content="同或异 · Triplets —— 三格区域的推理" />
+<meta property="og:description" content="每块区域恰好三格：要么三个同号，要么三个全异；跨区相邻的两格必须不同。每一盘都被独立穷举计数器数过唯一解。" />
+<meta property="og:url" content="https://z-biz-game.github.io/z-biz-game-triplets-cos/" />
+<meta property="og:image" content="https://z-biz-game.github.io/z-biz-game-triplets-cos/assets/img/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="同或异 · Triplets" />
+<meta name="twitter:description" content="三格区域的推理：同或全异，跨区相邻必不同。" />
+<meta name="twitter:image" content="https://z-biz-game.github.io/z-biz-game-triplets-cos/assets/img/og-image.png" />
 <link rel="stylesheet" href="css/game.css" />
 </head>
 <body>
 <div id="app">
   <header class="topbar">
     <div class="brand">
-      <h1>同或异</h1>
-      <p class="sub">Triplets · 三格区域的推理</p>
+      <!-- 三帧 sprite（■ ● ▲，assets/img/triad-sprite.png）：换笔时 JS 只改 data-frame，
+           取哪一帧由 css 的 background-position 决定，所以这块指示器和盘面符号是同一批图形。 -->
+      <span id="brand-mark" class="brand-mark" data-frame="0" aria-hidden="true"></span>
+      <div class="brand-text">
+        <h1>同或异</h1>
+        <p class="sub">Triplets · 三格区域的推理</p>
+      </div>
     </div>
     <div class="top-actions">
       <span id="stat-face" class="chip mono" title="题面给的东西：几块三格区域、几颗预先填好的符号">区域 — · 线索 —</span>
+      <button id="btn-pause" class="chip hud-btn" type="button" aria-pressed="false"
+        title="暂停 (P)：秒表停住，盘面这一局不接受任何一笔；再按一次接着走">‖ 暂停</button>
+      <button id="btn-mute" class="chip hud-btn" type="button" aria-pressed="false"
+        title="静音 (M)：真的把 AudioContext 挂起，静音态下不会再新建任何发声节点">♪ 声音</button>
+      <button id="btn-fullscreen" class="chip hud-btn" type="button" aria-pressed="false"
+        title="全屏 (F)">⛶ 全屏</button>
     </div>
   </header>
 
@@ -34,6 +68,7 @@
           </label>
           <span id="stat-seed" class="chip mono" title="开局用的原始 seed：可以直接敲回来。同一个 seed 在 node 和 Chrome 里画同一张盘">seed —</span>
           <span id="stat-time" class="chip mono" aria-label="本局耗时">00:00</span>
+          <span id="stat-paused" class="chip paused-chip" hidden>‖ 已暂停（按 P 继续）</span>
         </div>
 
         <div id="board-wrap">
@@ -107,7 +142,7 @@
           <span><i class="sw sw-player"></i>你（或提示）落下的符号</span>
           <span><i class="sw sw-note"></i>删剩的候选（笔记）</span>
         </div>
-        <p class="keyhint"><b>点格子</b> 落当前这支笔 · <b>右键</b> 擦掉这一格 · <b>1/2/3</b> 换 ■/●/▲ · <b>E</b> 轮笔（■●▲→笔记→擦掉） · <b>方向键</b> 移光标 · <b>回车</b> 落笔 · <b>退格</b> 擦光标格 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>N</b> 换一局</p>
+        <p class="keyhint"><b>点格子</b> 落当前这支笔 · <b>右键</b> 擦掉这一格 · <b>1/2/3</b> 换 ■/●/▲ · <b>E</b> 轮笔（■●▲→笔记→擦掉） · <b>方向键</b> 移光标 · <b>回车</b> 落笔 · <b>退格</b> 擦光标格 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>N</b> 换一局 · <b>P</b> 暂停/继续 · <b>M</b> 静音 · <b>F</b> 全屏</p>
       </aside>
     </section>
   </main>
@@ -120,5 +155,31 @@
 </div>
 
 <script type="module" src="js/main.js"></script>
+<script>
+// 离线壳注册。三条口径：
+//   1) 只在**安全上下文**注册（https，或 http://localhost / 127.0.0.1 —— 后者是 npm start 的形状，
+//      Chrome 认它是 secure context）。file:// 与其它 http 一律整段跳过：那里注册必失败，
+//      失败就会往控制台吐一条 error，而门禁的「启动无未捕获异常」量的正是这一类噪音。
+//   2) 路径经 new URL(p, document.baseURI) 换算：仓库根与 Pages 的 /<仓库名>/ 前缀两种形状都要对。
+//   3) 成败都只写进 window.__tripletsShell 这个读数，不 console.*、不 throw、不 unhandledrejection。
+(function () {
+  var shell = { registered: false, scope: '', skipped: '', error: '' };
+  try {
+    window.__tripletsShell = shell;
+    var secure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (!('serviceWorker' in navigator)) { shell.skipped = 'no-serviceWorker'; return; }
+    if (!secure) { shell.skipped = 'insecure:' + location.protocol; return; }
+    var url = new URL('sw.js', document.baseURI).href;
+    var scope = new URL('./', document.baseURI).href;
+    shell.scope = scope;
+    navigator.serviceWorker.register(url, { scope: scope }).then(
+      function () { shell.registered = true; },
+      function (e) { shell.error = String((e && e.name) || 'register-failed'); }
+    );
+  } catch (e) {
+    shell.error = String((e && e.name) || e);
+  }
+})();
+</script>
 </body>
 </html>
