@@ -62,6 +62,22 @@ export class FrameClock {
     return steps;
   }
 
+  /**
+   * 重开 / 换一局：把这一台钟彻底归零。
+   * 少清一样都会说谎 —— 漏了 simTime 就是「新局从上一局的时间接着走」，
+   * 漏了累加器就是「同一虚拟时长在新局上多算出半步」，漏了 lastTs 就是把首帧哨兵留在那儿。
+   */
+  reset({ paused = false } = {}) {
+    this.simAccumulator = 0;
+    this.simSteps = 0;
+    this.simTime = 0;
+    this.frames = 0;
+    this.pausedFrames = 0;
+    this.paused = !!paused;
+    this.lastTs = -1;
+    return this;
+  }
+
   setPaused(v) {
     const next = !!v;
     if (next === this.paused) return false;

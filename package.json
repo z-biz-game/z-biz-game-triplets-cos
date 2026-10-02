@@ -9,7 +9,7 @@
   },
   "scripts": {
     "check": "node tools/check.mjs",
-    "test": "node tools/rule-test.mjs && node tools/pencil-test.mjs && node tools/counter-test.mjs && node tools/generator-probe.mjs && node tests/a5-contradiction.test.mjs && node tests/c1-irreducible.test.mjs && node tests/rule-subsumption.test.mjs",
+    "test": "node tools/rule-test.mjs && node tools/pencil-test.mjs && node tools/counter-test.mjs && node tools/generator-probe.mjs && node tests/a5-contradiction.test.mjs && node tests/c1-irreducible.test.mjs && node tests/rule-subsumption.test.mjs && node tests/shell.test.mjs && node tests/save-corruption.test.mjs",
     "balance": "node tools/balance.mjs",
     "ceiling": "node tools/ceiling.mjs",
     "probe": "node tools/generator-probe.mjs",

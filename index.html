@@ -107,6 +107,7 @@
         <div class="acts">
           <button id="btn-hint" class="ghost" type="button" title="问引擎要下一条被迫的结论：它落一笔（或删一个候选），并把那条规则的那句话说给你。推不动了就直说推不动。">提示</button>
           <button id="btn-undo" class="ghost" type="button">撤销</button>
+          <button id="btn-restart" class="ghost" type="button" title="重开本局 (R)：还是这一张题面（seed 不变），但秒表、你的笔迹、步数、提示计数、键盘光标全部归零。要换一张盘请按「换一局」。">重开本局</button>
           <button id="btn-clear" class="ghost" type="button">全清</button>
           <button id="btn-new" class="primary" type="button">换一局</button>
         </div>
@@ -142,7 +143,7 @@
           <span><i class="sw sw-player"></i>你（或提示）落下的符号</span>
           <span><i class="sw sw-note"></i>删剩的候选（笔记）</span>
         </div>
-        <p class="keyhint"><b>点格子</b> 落当前这支笔 · <b>右键</b> 擦掉这一格 · <b>1/2/3</b> 换 ■/●/▲ · <b>E</b> 轮笔（■●▲→笔记→擦掉） · <b>方向键</b> 移光标 · <b>回车</b> 落笔 · <b>退格</b> 擦光标格 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>N</b> 换一局 · <b>P</b> 暂停/继续 · <b>M</b> 静音 · <b>F</b> 全屏</p>
+        <p class="keyhint"><b>点格子</b> 落当前这支笔 · <b>右键</b> 擦掉这一格 · <b>1/2/3</b> 换 ■/●/▲ · <b>E</b> 轮笔（■●▲→笔记→擦掉） · <b>方向键</b> 移光标 · <b>回车</b> 落光标格 · <b>空格</b> 还没落下光标时是暂停/继续 · <b>退格</b> 擦光标格 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>N</b> 换一局 · <b>R</b> 重开本局（同一张题面，秒表与笔迹全部归零） · <b>P</b> 暂停/继续 · <b>M</b> 静音 · <b>F</b> 全屏 · <b>?</b> 玩法说明</p>
       </aside>
     </section>
   </main>

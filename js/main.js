@@ -29,10 +29,12 @@
 // 也就是 document.baseURI 那条链——仓库根 / 与 Pages 子路径 /<repo>/ 下解析结果不同但都对。
 // 这里没有任何以 / 开头的路径；写死一条，Pages 子路径下就会 404，而那正是最该测的形状。
 
-import { applyThemeVars, Palette, Board } from './theme.js';
+import { applyThemeVars, Palette, Board, prefersReducedMotion, setReduceMotion } from './theme.js';
 import { Store } from './store.js';
 import { Game, ALL, BLANK } from './ui/game.js';
 import { BoardView, layoutFor } from './render/board.js';
+import { FrameClock } from './fx.js';
+import { Sfx } from './sfx.js';
 import { SYMBOL_TEXT, createState, symbolOf, blankCount, candidatesOf, nextDeduction, verify, RULE_ORDER } from './engine/pencil.js';
 import { SIZES, TIERS, SIZE_TABLE, parseSize, sizeAllowed, fingerprint, makePuzzle } from './engine/generate.js';
 
@@ -67,10 +69,20 @@ let solvedRecorded = false; // 总成绩里「赢过几盘」每盘只记一次
 let pen = '0'; // 当前这支笔：'0'/'1'/'2' 落子、'note' 翻候选、'erase' 擦掉
 let noteSym = 0; // 笔记那支笔翻的是哪个符号（1/2/3 在笔记笔下改的是它，不是笔）
 let cursor = -1; // 键盘光标；指针玩家永远看不到它（-1）
-let clockBase = 0; // 这一局已经走到的毫秒（存档恢复时带回来的那截）
-let clockStart = 0; // 本段计时的起点（performance.now，只用来读秒，不参与判断）
+let clockBase = 0; // 这一局已经走到的毫秒（存档恢复时带回来的那截，不参与仿真）
 let announceT = 0;
 const state = { state: 'boot' };
+
+// 定步长仿真时钟（js/fx.js）：**本文件唯一吃帧 dt 的地方**。秒表、盘外那圈光晕全部从它的
+// simTime 推出来，所以 30/60/120Hz 在同一虚拟时长读到同一批数（对拍见 tests/shell.test.mjs
+// 与 tools/verify.sh 之外那三档冒烟）。以前这里是 `setInterval(tickClock, 1000)` +
+// `performance.now()`：那是墙钟，暂停时它照走，切回标签页还会一跳。
+const simClock = new FrameClock();
+const sfx = new Sfx();
+let paused = false;
+let rafId = 0;
+let glow = 0; // 每帧写进 --fx-glow 的那一笔（读数，挂到门面上给门禁复验）
+let lastClockText = '';
 
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
 
@@ -89,10 +101,13 @@ function mintSeed(sizeKey) {
 // ---- 时钟（只有读数，没有判断） ------------------------------------------------------
 function resetClock(baseMs = 0) {
   clockBase = Math.max(0, Math.floor(baseMs) || 0);
-  clockStart = performance.now();
+  simClock.reset({ paused });
+  lastClockText = '';
 }
+// 秒表 = 存档带回来的那一截 + 定步长累加出来的 simTime。暂停时 FrameClock 一步都不走，
+// 所以这一句在暂停态恒等于按下 P 那一刻的值 —— 不是「看起来停住了」，是它没有别的时间源可吃。
 function elapsedMs() {
-  return clockBase + Math.max(0, performance.now() - clockStart);
+  return clockBase + Math.round(simClock.time * 1000);
 }
 function clockText() {
   const s = Math.floor(elapsedMs() / 1000);
@@ -101,11 +116,34 @@ function clockText() {
   return `${mm}:${ss}`;
 }
 function tickClock() {
-  if (!game || busy) return;
-  $('stat-time').textContent = clockText();
+  if (!game) return;
+  const t = clockText();
+  if (t !== lastClockText) {
+    lastClockText = t;
+    $('stat-time').textContent = t;
+  }
   if (!veil.hidden) $('win-meta').textContent = winMetaText();
 }
-setInterval(tickClock, 1000);
+
+// 盘外那圈光晕：连续量，只从 simTime 推（css/game.css 的 #board box-shadow 吃 --fx-glow）。
+// reduceMotion 那一支是真的分支 —— 动效退化成静图（强度恒 0），不是加一句 CSS 糊过去的。
+function paintGlow() {
+  glow = (prefersReducedMotion() || paused || !game) ? 0 : simClock.breathe(3.2);
+  wrap.style.setProperty('--fx-glow', glow.toFixed(4));
+}
+
+function frame(ts) {
+  rafId = requestAnimationFrame(frame);
+  simClock.frame(ts);
+  paintGlow();
+  tickClock();
+}
+
+function startLoop() {
+  if (rafId || typeof requestAnimationFrame !== 'function') return false;
+  rafId = requestAnimationFrame(frame);
+  return true;
+}
 
 // ---- 说一句话（给玩家看的），五秒后交还给引擎的读数 ----------------------------------
 // #state-line 平时写的是 verify() 的 why（引擎的话）；announce() 是**暂时的**一句人话，
@@ -145,7 +183,10 @@ function startWith(face, opts = {}) {
   solvedRecorded = false;
   hintCount = 0;
   cursor = -1;
+  dragging = false;
+  lastCell = -1;
   resetClock(opts.elapsedMs || 0);
+  paintGlow();
   layout();
   render();
   return game;
@@ -307,6 +348,7 @@ function paintStats(st) {
   if (!solvedRecorded) {
     solvedRecorded = true;
     Store.recordSolve(game.moves, hintCount);
+    sfx.fanfare(); // 走的是同一个 tone()：静音态下这一支也建不出任何节点
   }
   if (!stateLine.classList.contains('hint')) stateLine.textContent = st.why;
 }
@@ -314,11 +356,16 @@ function paintStats(st) {
 // ---- 写入口：一支笔 → 一次引擎状态变更 ----------------------------------------------
 // 三条路（左键、键盘回车、提示）都汇到这里，所以「屏上画的」「存档里的」「撤销栈里的」
 // 是同一笔账。pen 是 DOM 上那五个按钮的 data-pen，不是本文件另抄的一份表。
+const PLACE_SEMI = [0, 4, 7]; // 三种符号落子的音高差（半音），与 sfx.js 的 VOICES.place 同一套
+
 function applyCell(cell, { erase = false } = {}) {
   if (!game || cell < 0 || cell >= game.n) return null;
-  if (erase || pen === 'erase') return game.erase(cell);
-  if (pen === 'note') return game.toggleNote(cell, noteSym);
-  return game.place(cell, Number(pen));
+  if (paused) { announce('已暂停：这一局不接受任何一笔（按 P 继续）。'); return null; }
+  const erasing = erase || pen === 'erase';
+  const noting = pen === 'note';
+  const rec = erasing ? game.erase(cell) : noting ? game.toggleNote(cell, noteSym) : game.place(cell, Number(pen));
+  if (rec) sfx.tone(erasing ? 'erase' : noting ? 'note' : 'place', erasing || noting ? 0 : PLACE_SEMI[Number(pen)]);
+  return rec;
 }
 
 // 写完一笔之后：读数、画、存档，外加如果这一笔是空操作就说是**为什么**空。
@@ -334,28 +381,182 @@ function afterWrite(cell, rec) {
   }
   render();
   persist();
-  if (rec === null) {
+  if (rec === null && !paused) {
+    sfx.tone('deny');
     announce(game.isGiven(cell)
       ? '那一格是题面给的符号，不许擦也不许改——它是题面，不是笔迹。'
       : '这一笔没有改变任何东西（已经就是这个了），所以也不记步数。');
   }
 }
 
+// ---- 暂停 / 静音 / 全屏 / 重开 / 教学 ------------------------------------------------
+// 这一节的四个开关全部**行为成立**，不是把按钮点了个色：
+//   暂停 → FrameClock 一帧都不推进（秒表与光晕同时冻住），三条写入口一律拒收；
+//   静音 → sfx.setMuted(true) 真把 AudioContext suspend()，之后 tone() 在建节点之前就返回；
+//   全屏 → requestFullscreen 打在盘上真实存在的 #app 上，接口缺失时说的是实话不是死寂；
+//   重开 → 同一张题面（seed / 尺寸不动），其余与时间有关的东西全归零，shellReadout() 给前后读数。
+function setPaused(v, { announceIt = true } = {}) {
+  const next = !!v;
+  const changed = paused !== next;
+  paused = next;
+  simClock.setPaused(paused);
+  sfx.hold(paused); // 暂停期间真的没有声音：上下文挂起，恢复时（没静音才）放回来
+  const btn = $('btn-pause');
+  if (btn) {
+    btn.setAttribute('aria-pressed', paused ? 'true' : 'false');
+    btn.textContent = paused ? '▶ 继续' : '‖ 暂停';
+  }
+  const chip = $('stat-paused');
+  if (chip) chip.hidden = !paused;
+  paintGlow();
+  if (changed && announceIt) {
+    announce(paused
+      ? `已暂停：秒表停在 ${clockText()}，仿真一步都不走（simSteps=${simClock.simSteps}），盘面不接受任何一笔。按 P 继续。`
+      : `继续：秒表从 ${clockText()} 接着走。`);
+  }
+  return paused;
+}
+const togglePause = () => setPaused(!paused);
+
+function setMuted(v) {
+  const changed = sfx.setMuted(!!v);
+  const btn = $('btn-mute');
+  if (btn) {
+    btn.setAttribute('aria-pressed', sfx.muted ? 'true' : 'false');
+    btn.textContent = sfx.muted ? '🔇 静音' : '♪ 声音';
+  }
+  if (changed) {
+    announce(sfx.muted
+      ? `已静音：AudioContext 挂起，之后不再新建任何发声节点（已建 ${sfx.nodes} 个）。按 M 恢复。`
+      : `声音回来了：上下文已恢复（state=${sfx.state.ctxState}）。`);
+  }
+  return sfx.muted;
+}
+const toggleMute = () => setMuted(!sfx.muted);
+
+const fsElement = () => document.getElementById('app') || document.documentElement;
+const fsSupported = () => {
+  const el = fsElement();
+  return !!(el && (el.requestFullscreen || el.webkitRequestFullscreen));
+};
+const fsActive = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+function syncFsBtn() {
+  const btn = $('btn-fullscreen');
+  if (!btn) return;
+  const on = fsActive();
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  btn.textContent = on ? '⛶ 退出全屏' : '⛶ 全屏';
+}
+function toggleFullscreen() {
+  const el = fsElement();
+  if (!el) return false;
+  if (fsActive()) {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (!exit) return false;
+    Promise.resolve(exit.call(document)).catch(() => announce('退出全屏被系统挡掉了。'));
+    syncFsBtn();
+    return true;
+  }
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) {
+    announce('这台设备没给出全屏接口（requestFullscreen 不存在），不是按钮坏了。');
+    return false;
+  }
+  Promise.resolve(req.call(el))
+    .then(() => syncFsBtn())
+    .catch(() => announce('全屏被系统挡掉了（通常要求由真实用户手势触发）。'));
+  return true;
+}
+
+// 教学：'?' / H 之外的另一条路。规则本体在右侧面板那三条里，这里给的是「现在该干什么」。
+function showTutorial() {
+  const c = game ? game.counts() : null;
+  announce('玩法就三条：① 粗蓝线围出的每一块恰好三格；② 每块要么三个同号、要么三个全异；'
+    + '③ 跨区相邻的两格必须不同。选一支笔（1/2/3 换 ■/●/▲，E 轮笔）点格子落子，'
+    + 'H 问引擎要下一条被迫的结论，Z 撤销，N 换一局，R 重开本局，P 暂停，M 静音，F 全屏。'
+    + (c ? ` 当前 ${c.cells} 格里题面给了 ${c.given}、你填了 ${c.placed}、还空着 ${c.blank}。` : ''));
+  const rules = document.querySelector('.rules');
+  if (rules && rules.scrollIntoView) rules.scrollIntoView({ block: 'nearest' });
+}
+
+// 重开 / 再来一局：**同一张题面**（seed 与尺寸不动，题面那几颗珠子由 seed 重建），
+// 其余凡是与时间、笔迹、缓冲有关的东西全部归零。返回前后读数，让「复位是否真的发生」可测。
+function restartCurrent() {
+  const before = shellReadout();
+  if (!game) {
+    return { before, after: shellReadout(), started: !!newGame(currentSize()) };
+  }
+  setPaused(false, { announceIt: false });
+  const face = {
+    w: game.w, h: game.h, seed: game.seed, sizeKey: game.sizeKey,
+    reg: game.reg, givens: game.givens, fp: game.fp,
+  };
+  const g = startWith(face); // 全新 Game：st 由 createState 重建，undoStack / moves / marks 归零
+  dragging = false;
+  lastCell = -1;
+  glow = 0;
+  paintGlow();
+  persist();
+  const after = shellReadout();
+  announce(`重开本局 seed ${g.seed}：笔迹 ${before.placed} → ${after.placed} 格，`
+    + `步数 ${before.moves} → ${after.moves}，撤销 ${before.undo} → ${after.undo} 组，`
+    + `提示 ${before.hints} → ${after.hints}，秒表 ${before.clockText} → ${after.clockText}（simSteps ${before.simSteps} → ${after.simSteps}）。`);
+  return { before, after, started: true };
+}
+
+// 壳层读数：门禁与 /tmp 那三档对拍读的就是这一份。**每一个量都有唯一时间源（simClock）**，
+// 所以「帧率无关」这件事是可判的，不是嘴上说的。
+function shellReadout() {
+  const c = game ? game.counts() : { given: 0, placed: 0, notes: 0, blank: 0, cells: 0, regions: 0 };
+  return {
+    phase: !game ? 'nogame' : paused ? 'paused' : state.state === 'busy' ? 'busy' : 'playing',
+    paused,
+    muted: sfx.muted,
+    simTime: Math.round(simClock.time * 1e6) / 1e6,
+    simSteps: simClock.simSteps,
+    simAccumulator: Math.round(simClock.simAccumulator * 1e9) / 1e9,
+    frames: simClock.frames,
+    glow: Math.round(glow * 1e6) / 1e6,
+    elapsedMs: elapsedMs(),
+    clockText: clockText(),
+    moves: game ? game.moves : 0,
+    undo: game ? game.undoStack.length : 0,
+    given: c.given,
+    placed: c.placed,
+    notes: c.notes,
+    blank: c.blank,
+    hints: hintCount,
+    cursor,
+    wonAt,
+    veilHidden: veil.hidden,
+    sfxNodes: sfx.nodes,
+    sfxPlayed: sfx.played,
+    sfxBlocked: sfx.blocked,
+    reducedMotion: prefersReducedMotion(),
+    fullscreenSupported: fsSupported(),
+    fullscreenActive: fsActive(),
+    seed: game ? game.seed : '',
+    sizeKey: game ? game.sizeKey : currentSize(),
+  };
+}
+
 // ---- 指针：格子的矩形就是它的按钮 ----------------------------------------------------
 let dragging = false;
 let lastCell = -1;
 
-canvas.addEventListener('pointerdown', (ev) => {
+// clientX/clientY 一律交给 view.hitCell（它先减 getBoundingClientRect 的左上角，再用**CSS 像素**
+// 的格边长换算）——画布的 devicePixel 尺寸与 CSS 尺寸不同，少这一步就是「手机上点 A 打 B」。
+function strokeStart(clientX, clientY, button, ev) {
   if (!game || busy) return;
-  if (ev.button !== 0 && ev.button !== 2) return;
-  const cell = view.hitCell(ev.clientX, ev.clientY);
+  if (paused) { announce('已暂停：这一局不接受任何一笔（按 P 继续）。'); return; }
+  const cell = view.hitCell(clientX, clientY);
   if (cell < 0) return; // 盘外、留白——什么都不做，绝不「就近吸附」到别的格
-  ev.preventDefault();
+  if (ev && ev.preventDefault) ev.preventDefault();
   canvas.focus({ preventScroll: true });
   game.beginGesture();
   dragging = true;
   lastCell = cell;
-  const rec = applyCell(cell, { erase: ev.button === 2 });
+  const rec = applyCell(cell, { erase: button === 2 });
   if (!rec) {
     // 空操作不留下一组空的撤销记录
     game.endGesture();
@@ -363,7 +564,25 @@ canvas.addEventListener('pointerdown', (ev) => {
     lastCell = -1;
   }
   afterWrite(cell, rec);
+}
+
+canvas.addEventListener('pointerdown', (ev) => {
+  if (ev.button !== 0 && ev.button !== 2) return;
+  strokeStart(ev.clientX, ev.clientY, ev.button, ev);
 });
+
+// 没有 PointerEvent 的环境（老 WebView / 老 iOS Safari）才装 touch + mouse 那两条回落：
+// 同时装会在支持指针的现代浏览器上双发，一次点按落两笔。
+if (!(typeof window !== 'undefined' && 'PointerEvent' in window)) {
+  canvas.addEventListener('touchstart', (ev) => {
+    const t = ev.changedTouches && ev.changedTouches[0];
+    if (t) strokeStart(t.clientX, t.clientY, 0, ev);
+  }, { passive: false });
+  canvas.addEventListener('touchend', endDrag);
+  canvas.addEventListener('touchcancel', endDrag);
+  canvas.addEventListener('mousedown', (ev) => strokeStart(ev.clientX, ev.clientY, ev.button, ev));
+  canvas.addEventListener('mouseup', endDrag);
+}
 
 canvas.addEventListener('pointermove', (ev) => {
   if (!dragging || !game) return;
@@ -419,15 +638,48 @@ function typeKey(ev) {
     return;
   }
   if (k === 'Enter' || k === ' ' || k === 'Spacebar') {
-    if (!game || cursor < 0) return;
     ev.preventDefault();
+    if (!game) { newGame(currentSize()); return; } // 开局那一键：没有盘的时候 Enter/Space 就是「开始」
+    if (paused) { announce('已暂停：这一局不接受任何一笔（按 P 继续）。'); return; }
+    if (cursor < 0) {
+      // 还没有键盘光标时，Space 是「暂停/继续」那一键（P 的同义），不是凭空落子
+      if (k === ' ') togglePause();
+      else { cursor = 0; render(); }
+      return;
+    }
     afterWrite(cursor, applyCell(cursor));
     return;
   }
   if (k === 'Backspace' || k === 'Delete') {
     if (!game || cursor < 0) return;
     ev.preventDefault();
-    afterWrite(cursor, game.erase(cursor));
+    if (paused) { announce('已暂停：这一局不接受任何一笔（按 P 继续）。'); return; }
+    afterWrite(cursor, applyCell(cursor, { erase: true }));
+    return;
+  }
+  if (k === 'p' || k === 'P') {
+    ev.preventDefault();
+    togglePause();
+    return;
+  }
+  if (k === 'm' || k === 'M') {
+    ev.preventDefault();
+    toggleMute();
+    return;
+  }
+  if (k === 'f' || k === 'F') {
+    ev.preventDefault();
+    toggleFullscreen();
+    return;
+  }
+  if (k === 'r' || k === 'R') {
+    ev.preventDefault();
+    restartCurrent();
+    return;
+  }
+  if (k === '?' || k === '/') {
+    ev.preventDefault();
+    showTutorial();
     return;
   }
   if (k === '1' || k === '2' || k === '3') {
@@ -493,6 +745,7 @@ function syncPenUI() {
 // 返回引擎给的那个对象（门禁读的是它），推不动时也返回它——那句「推不动」是证据不是故障。
 function hint() {
   if (!game || busy) return null;
+  if (paused) { announce('已暂停：提示也是一笔，暂停时盘面不接受任何一笔（按 P 继续）。'); return null; }
   const d = nextDeduction(game.st);
   if (d.contradiction) {
     announce(`矛盾：${d.why}（规则 ${d.rule}）——擦掉几笔再问一次。`);
@@ -525,6 +778,7 @@ function hint() {
   }
   const rec = d.kind === 'place' ? game.place(d.cell, d.value) : game.toggleNote(d.cell, d.value);
   hintCount++;
+  if (rec) sfx.tone('hint');
   srCell.textContent = game.cellReport(d.cell);
   render();
   persist();
@@ -563,6 +817,41 @@ $('btn-close-veil').addEventListener('click', () => {
   veilDismissed = true;
 });
 $('btn-hint').addEventListener('click', hint);
+$('btn-restart').addEventListener('click', restartCurrent);
+$('btn-pause').addEventListener('click', togglePause);
+$('btn-mute').addEventListener('click', toggleMute);
+$('btn-fullscreen').addEventListener('click', toggleFullscreen);
+// 首手势解锁 AudioContext：浏览器只允许在用户手势之后起播，所以 sfx 里构造时不建上下文。
+// 这里装在 document 上（捕获一次就撤），点盘面、按键盘、点按钮任一样都算。
+const unlockAudio = () => {
+  sfx.unlock();
+  document.removeEventListener('pointerdown', unlockAudio, true);
+  document.removeEventListener('keydown', unlockAudio, true);
+  document.removeEventListener('click', unlockAudio, true);
+};
+for (const t of ['pointerdown', 'keydown', 'click']) document.addEventListener(t, unlockAudio, true);
+for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) {
+  document.addEventListener(ev, syncFsBtn);
+}
+// 标签页切到后台：仿真与音频一起停（回来接着走，不补那一大截 dt —— 见 fx.js 的 maxFrameDt）。
+document.addEventListener('visibilitychange', () => {
+  const hidden = !!(document.hidden || document.webkitHidden);
+  sfx.hold(hidden || paused);
+  if (hidden && rafId && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(rafId);
+    rafId = 0;
+  } else if (!hidden) {
+    startLoop();
+  }
+});
+// 系统的动效偏好：CSS 那侧有自己的 media query，JS 这侧管每帧写进 --fx-glow 的那一笔（各关各的）。
+(() => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+  const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+  setReduceMotion(mq.matches); // 初值：现在就在减动效，光晕第一帧起就是 0
+  if (mq.addEventListener) mq.addEventListener('change', (e) => setReduceMotion(e.matches));
+  else if (mq.addListener) mq.addListener((e) => setReduceMotion(e.matches));
+})();
 $('btn-undo').addEventListener('click', () => {
   if (!game) return;
   if (game.undo()) {
@@ -653,6 +942,22 @@ window.triplets = {
   elapsedMs,
   clockText,
   faceOf,
+  // 壳层四开关与它们的读数：暂停/静音/全屏/重开是否**行为成立**，门禁与 /tmp 的三档对拍
+  // 都只认这一份（tick 是手工喂一帧假时钟的入口，探针不靠墙钟也能推进仿真）。
+  clock: simClock,
+  sfx,
+  get paused() { return paused; },
+  setPaused,
+  togglePause,
+  setMuted,
+  toggleMute,
+  toggleFullscreen,
+  fullscreenSupported: fsSupported,
+  restart: restartCurrent,
+  tutorial: showTutorial,
+  readout: shellReadout,
+  tick: frame,
+  startLoop,
   // 门禁读覆盖层用这个：它量的既是 DOM（hidden/display/矩形）也是命中测试
   // （elementFromPoint 打在最上层的是谁）——「hidden 还在吃点击」只有这两样一起看才抓得住。
   veilInfo: () => {
@@ -675,6 +980,8 @@ window.triplets = {
 applyThemeVars();
 buildSizes();
 syncPenUI();
+syncFsBtn();
+startLoop();
 state.state = 'boot';
 
 // ?seed= 优先于存档：它是「我要看这一张盘」的显式请求，不能被上一次玩的东西顶掉。
