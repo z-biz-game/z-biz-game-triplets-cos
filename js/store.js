@@ -13,27 +13,69 @@
 // 键里带 v1：数据结构改了要换键名，不许让旧存档把新代码喂进半截状态。
 
 const KEY = 'triplets.save.v1';
+// 秒表的可信上界：7 天。越界当没记过 —— 那通常是手改或别的版本写进来的数。
+const MAX_ELAPSED_MS = 7 * 24 * 3600 * 1000;
 
 const defaults = () => ({
   resume: null,
   totals: { solved: 0, games: 0, moves: 0, hints: 0 },
 });
 
-function load() {
+const count = (v) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
+
+// 第一段：整包可用性。JSON 坏掉 / 隐私模式 / 配额 = 「没有存档」，不许变成开局失败。
+// 这一段**只**判整包，一条记录的坏不在这里判 —— 在这里判会牵连另一条好的。
+function readRaw() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return defaults();
+    if (!raw) return null;
     const parsed = JSON.parse(raw);
-    const base = defaults();
-    return {
-      ...base,
-      ...parsed,
-      totals: { ...base.totals, ...(parsed.totals || {}) },
-    };
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
   } catch {
-    // 隐私模式 / 手改过的 JSON / 配额：一律当没有存档，不许让读档失败变成开局失败
-    return defaults();
+    return null;
   }
+}
+
+// 第二段之一：总成绩。四个数各自消毒，坏的那一个回 0，其余三个不跟着陪葬。
+function sanitizeTotals(t) {
+  const base = defaults().totals;
+  if (!t || typeof t !== 'object' || Array.isArray(t)) return base;
+  return {
+    solved: Number.isFinite(t.solved) ? count(t.solved) : base.solved,
+    games: Number.isFinite(t.games) ? count(t.games) : base.games,
+    moves: Number.isFinite(t.moves) ? count(t.moves) : base.moves,
+    hints: Number.isFinite(t.hints) ? count(t.hints) : base.hints,
+  };
+}
+
+// 第二段之二：进行中的一局。回来的要么是完整可用的一局，要么是 null（null 就正常开局，
+// 绝不拿半截 marks 喂引擎）。它的报废不带走 totals。
+function sanitizeResume(r) {
+  if (!r || typeof r !== 'object' || Array.isArray(r)) return null;
+  if (typeof r.seed !== 'string' || !r.seed) return null;
+  if (typeof r.marks !== 'string' || !r.marks) return null;
+  if (!Number.isFinite(r.w) || !Number.isFinite(r.h)) return null;
+  const w = Math.floor(r.w);
+  const h = Math.floor(r.h);
+  if (w < 1 || h < 1 || w * h !== r.marks.length) return null; // 格数不是它声称的那个数
+  if (typeof r.fp !== 'string' || !r.fp) return null;
+  return {
+    seed: r.seed,
+    sizeKey: typeof r.sizeKey === 'string' && r.sizeKey ? r.sizeKey : `${w}x${h}`,
+    marks: r.marks,
+    moves: count(r.moves),
+    w,
+    h,
+    fp: r.fp,
+    elapsedMs: Number.isFinite(r.elapsedMs) ? count(Math.min(r.elapsedMs, MAX_ELAPSED_MS)) : 0,
+    at: Number.isFinite(r.at) ? r.at : 0,
+  };
+}
+
+function load() {
+  const parsed = readRaw();
+  if (!parsed) return defaults();
+  return { resume: sanitizeResume(parsed.resume), totals: sanitizeTotals(parsed.totals) };
 }
 
 export const Store = {
