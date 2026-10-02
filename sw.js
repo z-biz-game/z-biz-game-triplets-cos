@@ -37,6 +37,9 @@ const CORE_ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
+  './icons/icon-1024.png',
+  './icons/icon-maskable-512.png',
+  './assets/img/og-image.png',
   './assets/textures/grain-256.png',
   './assets/img/triad-sprite.png',
 ];

@@ -159,8 +159,9 @@ select,
   background: var(--surface-lift);
 }
 
-/* 光晕由 js/fx.js 每帧写 --fx-glow（0..1）：它是**吃了帧 dt 的**积分钟推出来的量，
-   所以 30/60/120Hz 上同一虚拟时长看到的强度一样。只吃 DOM，一像素都不进画布。 */
+/* 光晕由 js/main.js 每帧写 --fx-glow（0..1）：强度取自 js/fx.js 那台定步长时钟的 simTime（帧 dt 只进
+   累加器那一行），所以 30/60/120Hz 在同一虚拟步号上看到同一个值（tests/shell.test.mjs 那三档逐点比过）；
+   暂停或系统减动效偏好下这一笔恒为 0 —— 动效退化成静图。只吃 DOM，一像素都不进画布。 */
 #board-wrap { --fx-glow: 0; }
 
 #board {
