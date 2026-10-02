@@ -55,6 +55,7 @@ const veil = $('win-veil');
 const stateLine = $('state-line');
 const srCell = $('sr-cell');
 const sizeSelect = $('size-select');
+const brandMark = $('brand-mark'); // assets/img/triad-sprite.png 那三帧（■ ● ▲）的载体
 
 const view = new BoardView(canvas);
 
@@ -68,6 +69,7 @@ let veilDismissed = false;
 let solvedRecorded = false; // 总成绩里「赢过几盘」每盘只记一次
 let pen = '0'; // 当前这支笔：'0'/'1'/'2' 落子、'note' 翻候选、'erase' 擦掉
 let noteSym = 0; // 笔记那支笔翻的是哪个符号（1/2/3 在笔记笔下改的是它，不是笔）
+let brandFrame = 0; // 品牌 sprite 现在停在哪一帧（0/1/2 = ■/●/▲）；擦掉笔沿用上一帧
 let cursor = -1; // 键盘光标；指针玩家永远看不到它（-1）
 let clockBase = 0; // 这一局已经走到的毫秒（存档恢复时带回来的那截，不参与仿真）
 let announceT = 0;
@@ -738,6 +740,13 @@ function syncPenUI() {
   const noteBtn = $('pen-note');
   noteBtn.textContent = `✎ 笔记 ${GLYPH[noteSym]}`;
   noteBtn.title = `笔记：点一下把 ${SYMBOL_TEXT[noteSym]} 从本格候选里删掉，再点一下放回来（1/2/3 换符号）`;
+  // 顶部那块指示器露的就是 triad-sprite.png 上那一帧：落子笔与笔记笔都指向「这支笔管的那个
+  // 符号」，擦掉笔没有符号，所以停在上一帧并压暗——data-dim 是「这一支不落符号」的图示。
+  const frame = pen === 'note' ? noteSym : pen === 'erase' ? brandFrame : Number(pen);
+  brandFrame = frame;
+  brandMark.dataset.frame = String(frame);
+  if (pen === 'note' || pen === 'erase') brandMark.dataset.dim = '1';
+  else delete brandMark.dataset.dim;
 }
 
 // ---- 提示：问引擎要下一条被迫的结论 --------------------------------------------------
@@ -911,6 +920,9 @@ window.triplets = {
   },
   get noteSym() {
     return noteSym;
+  },
+  get brandFrame() {
+    return brandFrame;
   },
   get cursor() {
     return cursor;

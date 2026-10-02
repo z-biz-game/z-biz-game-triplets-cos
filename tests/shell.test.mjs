@@ -9,11 +9,14 @@
 //   5 减动效 —— prefers-reduced-motion: reduce 时光晕恒 0（动效退化为静图）。
 //   6 阴性对照 —— 把 js/fx.js 累加器那一行 `accum += dt` 换成 `accum += 1/60`（定步长改造之后
 //                 全仓唯一还在吃帧 dt 的行，规范 §6 指定的靶子），第 4 条必须换红。不红说明尺是空跑的。
+//   7 sprite  —— 换笔真的在改品牌指示器那一帧，且 JS 写出的帧号数 = triad-sprite.png 物理帧数
+//                （只查 css 里有没有 `data-frame` 是字符串命中；两边对账才叫「这张图被用上了」）。
 //
 // 两条已实测踩过的坑钉在这里：三档对齐既看**虚拟时长**也看**仿真步号**（只看墙钟会被 1000/60 的
 // 浮点亏损凭空判红，只看步号则对累加策略免疫 —— 两头都量才抓得住真缺陷）；假时钟从 1000ms 起步
 // （从 0 起步会被首帧哨兵吃掉一帧，凭空造出 25ms 的假依赖，见 js/fx.js 顶部）。
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createDomEnv, makeLcg } from './dom-env.mjs';
 import { FrameClock, SIM_STEP } from '../js/fx.js';
 
@@ -267,4 +270,37 @@ let honestSpread = 0;
   log('阴性对照', `accum += 1/60 → 极差 ${spread}（正尺 ${honestSpread}）⇒ 尺子真吃得到帧 dt`);
 }
 
+// ---- 7 品牌 sprite 那三帧真的被笔态驱动（纹理不是挂着当装饰） --------------------------
+{
+  const { env, t } = await boot();
+  const mark = env.el('brand-mark');
+  const seen = new Set();
+  for (const p of ['0', '1', '2']) {
+    t.setPen(p);
+    assert.equal(mark.dataset.frame, p, `落子笔 ${p} 该露第 ${p} 帧`);
+    assert.equal(mark.dataset.dim, undefined, '落子笔不落空：这一支真的要落这个符号，不该压暗');
+    seen.add(mark.dataset.frame);
+  }
+  t.setPen('note');
+  assert.equal(mark.dataset.dim, '1', '笔记笔不落符号，指示器压暗');
+  env.key('3'); // 笔记笔下 1/2/3 改的是「翻哪个候选」，不是笔
+  assert.equal(t.noteSym, 2, '3 该把笔记符号切到三角');
+  assert.equal(mark.dataset.frame, '2', '笔记笔的帧跟着它要翻的那个符号走');
+  t.setPen('erase');
+  assert.equal(mark.dataset.frame, '2', '擦掉笔没有符号：沿用上一帧');
+  assert.equal(mark.dataset.dim, '1', '擦掉笔压暗');
+  // 资产侧：直接读那张 PNG 的 IHDR，数它物理上有几帧（宽 = 3×高 ⇒ 三帧横排，见 css 的 background-size: 300%）
+  const png = readFileSync(new URL('../assets/img/triad-sprite.png', import.meta.url));
+  assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'triad-sprite.png 得真是 PNG');
+  const w = png.readUInt32BE(16);
+  const h = png.readUInt32BE(20);
+  assert.ok(w > 0 && h > 0, `IHDR 读出来的尺寸不合法：${w}x${h}`);
+  const physicalFrames = w / h;
+  assert.equal(physicalFrames, Math.round(physicalFrames), `sprite 宽高比 ${w}x${h} 不是整数帧数`);
+  assert.equal(seen.size, physicalFrames,
+    `JS 能写出的帧号有 ${seen.size} 个（${[...seen].join('/')}），而 ${w}x${h} 这张图上有 ${physicalFrames} 帧 —— 有一边在说谎`);
+  log('sprite 帧', `triad-sprite.png ${w}x${h} = ${physicalFrames} 帧，笔态写出帧号 ${[...seen].join('/')}（笔记跟 noteSym、擦掉沿用+压暗）`);
+}
+
 console.log(`shell.test 全绿：${checks} 组断言`);
+

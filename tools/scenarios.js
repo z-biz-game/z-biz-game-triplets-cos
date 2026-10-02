@@ -396,9 +396,18 @@
     // 而 given 那两笔（左键改、右键擦）一组都不许添。
     const movesAtStart = g.moves;
     const sigs = [];
+    // 顶部那块指示器是 assets/img/triad-sprite.png 那三帧（■ ● ▲）在屏幕上的落点。帧号由
+    // js/main.js 的 syncPenUI() 写，露哪一格由 css 的 [data-frame] 选 —— 两个都读才叫「这张
+    // 图真被用上」：只查 dataset 量到的是属性，不是像素。变异：删掉 syncPenUI 里写
+    // brandMark.dataset.frame 的那一行 ⇒ 帧号恒 '0'、背景位置只剩一个值，下面三条一起红。
+    const bm = document.getElementById('brand-mark');
+    const brandFrames = [];
+    const brandPos = [];
     for (let k = 0; k < 3; k++) {
       const cell = pick[k];
       await clickSel('#pen-' + PEN_BTN[k]);
+      brandFrames.push(bm.dataset.frame || '');
+      brandPos.push(getComputedStyle(bm).backgroundPositionX);
       await tapCell(cell, 0);
       const got = shapeOf(cell, playerRgb);
       sigs.push(got);
@@ -407,6 +416,15 @@
         `签名=${got} 想要=${SHAPE[k]} symbolAt=${g.symbolAt(cell)} 想要=${k} cand=${g.st.cand[cell]}`);
     }
     ck('render:三种字形的形状签名互不相同（像素能把它们认出来）', new Set(sigs).size === 3, `签名=${sigs.join('/')}`);
+
+    const bmImg = getComputedStyle(bm).backgroundImage || '';
+    const bmRect = bm.getBoundingClientRect();
+    ck('render:换笔真的把品牌 sprite 切到对应那一帧（帧号跟着笔号，且像素上那一格真的挪了）',
+      brandFrames.join(',') === '0,1,2' && new Set(brandPos).size === 3 && A().brandFrame === 2,
+      `帧号=${brandFrames.join('/')} 背景位置=${brandPos.join('/')} API.brandFrame=${A().brandFrame}`);
+    ck('render:那块指示器用的确实是这张三帧图，而且它在屏幕上看得见',
+      bmImg.includes('triad-sprite.png') && bmRect.width > 0 && bmRect.height > 0,
+      `background-image=${bmImg.slice(0, 80)} 矩形=${bmRect.width}x${bmRect.height}`);
 
     // 读数三方一致：DOM 文本 = verify 那一份 st 数出来的 = 逐格数出来的
     const c = faceCounts(g);
@@ -453,6 +471,13 @@
     ck('render:笔记再点一次把候选放回原位（翻，不是加），那一格也一起回到「没记=三槽都空」',
       g.st.cand[noteCell] === candBefore && inkBack.every((n) => n === 0) && g.counts().notes === notesBefore,
       `cand=${g.st.cand[noteCell]} 想要=${candBefore} 各槽 note 像素 放回后=${inkBack.join('/')} 想要=0/0/0 notes=${g.counts().notes} 想要=${notesBefore}`);
+
+    // 笔记笔不落符号 ⇒ 指示器压暗（css 那条 [data-dim='1'] 真的把 opacity 变成 0.5），
+    // 而它露的那一帧仍指着「这一支要翻哪个符号」，不是随手停在上一帧。
+    ck('render:笔记笔下指示器压暗、帧号跟着它翻的那个符号',
+      bm.dataset.dim === '1' && Math.abs(Number(getComputedStyle(bm).opacity) - 0.5) < 0.01 &&
+        bm.dataset.frame === String(A().noteSym),
+      `dim=${bm.dataset.dim} opacity=${getComputedStyle(bm).opacity} 帧=${bm.dataset.frame} 想要=${A().noteSym}`);
 
     // 右键擦掉：回到「没落笔 + 候选全在」，屏上那颗 player 色消失
     await clickSel('#pen-erase');
