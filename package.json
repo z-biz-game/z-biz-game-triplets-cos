@@ -16,7 +16,9 @@
     "golden": "node tools/golden-test.mjs",
     "golden:remint": "node tools/write-golden.mjs --check",
     "start": "node server.cjs",
-    "verify": "bash tools/verify.sh"
+    "verify": "bash tools/verify.sh",
+    "deploy-set": "node tools/deploy-set.mjs",
+    "deploy-set:selftest": "node tools/deploy-set-selftest.mjs"
   },
   "keywords": [
     "game",

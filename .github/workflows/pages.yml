@@ -19,16 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # 没有构建步骤：仓库里跑的就是线上跑的（纯 ESM，无打包器），所以站点是一次文件拷贝。
-      # 名单只有这三样，而且是逐条对过的：index.html 里只引用 css/game.css 与 js/main.js
-      # （favicon 是内联 data: URI，没有别的资产），js/ 里没有任何动态 import。
-      # 用 `path: .` 会把 server.cjs、tools/（里面躺着 tools/golden.mjs = 每张出货盘的唯一解）、
-      # tests/ 和 *.md 一起传上去——tools/verify.sh 第 5 段那四条 404 断言拦的就是这个。
+      # 拷哪些不写在这里——写在 tools/assemble-site.sh，本地闸与 CI 调同一支脚本。
+      # 以前这里是手抄的三行 cp（index.html/css/js），于是页面后来引用的
+      # manifest.webmanifest、sw.js、icons/* 全都上不了线：线上 404，而 CI 一路绿，
+      # 因为没有任何一步加载过那份产物。服务器、台架、文档、node_modules 仍在 artifact 外面。
       - name: Assemble static site
-        run: |
-          mkdir _site
-          cp index.html _site/
-          cp -r css js _site/
+        run: bash tools/assemble-site.sh _site
+      - name: Deploy set gate (checks the very _site about to be uploaded)
+        run: node tools/deploy-set.mjs _site
       # configure-pages@v5：本仓此前没有 Pages 站点，这一步会顺手建一个。
       # deploy-pages@v4 + upload-pages-artifact@v3 是配套的——早先用 deploy-pages@v3 时
       # 出现过"CI 绿、站点 404"（取不到 artifact），同组织其他仓踩过。
