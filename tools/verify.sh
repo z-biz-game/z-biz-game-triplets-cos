@@ -109,6 +109,11 @@ sys.exit(0 if (suites >= 7 and fails == 0 and tot > 0) else 1)
   GEXIT=$?
   grep -E '^RESULT' "$GOLDEN_LOG" | sed 's/^/  /' || true
   [ $GEXIT -eq 0 ] || { echo "  FAIL golden-test exit=${GEXIT}（见 ${GOLDEN_LOG}）" >&2; FAILED=1; note fail 'golden-test 红'; }
+  # 部署集闸：ci.yml 跑这两步、本地整闸以前一次都不跑（59 仓同形）。「本地全绿、线上 404 自己的
+  # manifest / sw.js / 图标」这一类坏法缺的就是这一步。它不碰 Chrome，所以进 run 这一档就够了。
+  echo "=== unit: 部署集闸（页面要取的东西必须在产物里）==="
+  run deploy-set node tools/deploy-set.mjs
+  run deploy-set-selftest node tools/deploy-set-selftest.mjs
 fi
 
 # ── 2. 起服 + 标题身份证据 ────────────────────────────────────────────────────────────
