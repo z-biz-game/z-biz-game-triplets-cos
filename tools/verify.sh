@@ -301,8 +301,8 @@ if [ "$LOCAL" = 1 ]; then
     BASE_URL=$PRE node tools/playtest.cjs scenario boot 2>/tmp/triplets-prefix-boot.console.log | tail -1 | sed 's/^RESULT //' | parse_row "prefix-boot" || FAILED=1
     export BASE_URL=$BASE
   fi
-  rm -f "$PROOT/$REPO/index.html" "$PROOT/$REPO/css" "$PROOT/$REPO/js"
-  rmdir "$PROOT/$REPO" "$PROOT" 2>/dev/null
+  rm -rf "$PROOT/$REPO"  # css/ 与 js/ 是 assemble-site.sh 拷出来的真目录，rm -f 对着目录只会报错、清场清不净
+  rmdir "$PROOT" 2>/dev/null
   # 符号链接交回给系统：$PROOT 已经空了，清掉之后 cleanup 那一趟就不必再碰它。
   PROOT=""
 fi
