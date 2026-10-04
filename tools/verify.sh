@@ -68,7 +68,7 @@ run() { # run <名字> <命令…>：一步红就把 FAILED 抬起来，并且�
   if "$@"; then
     echo "  ok  $name"
   else
-    echo "  FAIL $name（exit $?）" >&2
+    echo "  FAIL ${name}（exit $?）" >&2
     FAILED=1
     note fail "$name 这一步没过"
   fi
@@ -97,9 +97,9 @@ for line in open('$UNIT_LOG'):
 print('  npm test：%d 套，合计 %d 条断言，红 %d 条' % (suites, tot, fails))
 sys.exit(0 if (suites >= 7 and fails == 0 and tot > 0) else 1)
 "; then
-    [ $UEXIT -eq 0 ] || { echo "  FAIL npm test 退出码 $UEXIT，但 RESULT 行看起来是绿的——查日志 $UNIT_LOG" >&2; FAILED=1; }
+    [ $UEXIT -eq 0 ] || { echo "  FAIL npm test 退出码 ${UEXIT}，但 RESULT 行看起来是绿的——查日志 $UNIT_LOG" >&2; FAILED=1; }
   else
-    echo "  FAIL npm test 这一趟不够七套、或有红、或读不出数（exit=$UEXIT，见 $UNIT_LOG）" >&2
+    echo "  FAIL npm test 这一趟不够七套、或有红、或读不出数（exit=${UEXIT}，见 ${UNIT_LOG}）" >&2
     FAILED=1
     note fail "npm test 七套没过或套数不足"
   fi
@@ -108,7 +108,7 @@ sys.exit(0 if (suites >= 7 and fails == 0 and tot > 0) else 1)
   node tools/golden-test.mjs >"$GOLDEN_LOG" 2>&1
   GEXIT=$?
   grep -E '^RESULT' "$GOLDEN_LOG" | sed 's/^/  /' || true
-  [ $GEXIT -eq 0 ] || { echo "  FAIL golden-test exit=$GEXIT（见 $GOLDEN_LOG）" >&2; FAILED=1; note fail 'golden-test 红'; }
+  [ $GEXIT -eq 0 ] || { echo "  FAIL golden-test exit=${GEXIT}（见 ${GOLDEN_LOG}）" >&2; FAILED=1; note fail 'golden-test 红'; }
 fi
 
 # ── 2. 起服 + 标题身份证据 ────────────────────────────────────────────────────────────
@@ -245,9 +245,9 @@ if [ "$LOCAL" = 1 ]; then
   echo "=== url-shape 2/3：Pages 前缀 /$REPO/ + 只发 index.html|css|js 的部署形状 ==="
   PROOT=$(mktemp -d)
   mkdir -p "$PROOT/$REPO"
-  ln -s "$HERE/index.html" "$PROOT/$REPO/index.html"
-  ln -s "$HERE/css" "$PROOT/$REPO/css"
-  ln -s "$HERE/js" "$PROOT/$REPO/js"
+  # 替身根从那一份清单生成——pages.yml 与部署集闸调的都是这支脚本；手抄的 ln -s 只带 index.html/css/js，
+  # PWA 轮接上 manifest.webmanifest、sw.js、icons/ 之后这条腿量的就不是上线那一份了（行数不变，引用不漂）。
+  bash "$HERE/tools/assemble-site.sh" "$PROOT/$REPO"
   PRE="http://127.0.0.1:$HTTP/$REPO/"
   kill $SPID 2>/dev/null
   SPID=0
@@ -259,17 +259,17 @@ if [ "$LOCAL" = 1 ]; then
     sleep 0.25
   done
   PRESERVED=$(curl -fsS -m 3 "$PRE" 2>/dev/null || true)
-  case "$PRESERVED" in *js/main.js*) ;; *) echo "  FAIL 前缀形状下拿不到本仓 index.html：$PRE（见 /tmp/triplets-prefix-server.log）" >&2; FAILED=1 ;; esac
+  case "$PRESERVED" in *js/main.js*) ;; *) echo "  FAIL 前缀形状下拿不到本仓 index.html：${PRE}（见 /tmp/triplets-prefix-server.log）" >&2; FAILED=1 ;; esac
   # 反证：部署名单里没有 tools/，所以答案文件在线上必须够不到。本地替它兜底就等于门禁在
   # 给被测对象自己打的补丁做见证，那这条腿永远红不了。
   for miss in "$PRE"tools/golden.mjs "$PRE"tools/scenarios.js "http://127.0.0.1:$HTTP/tools/golden.mjs" "$PRE"DESIGN.md; do
     CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 3 "$miss" 2>/dev/null)
     if [ "$CODE" = 404 ]; then
-      echo "  ok  够不到 $miss（HTTP $CODE，答案与门禁脚本都不在线上产物里）"
+      echo "  ok  够不到 ${miss}（HTTP ${CODE}，答案与门禁脚本都不在线上产物里）"
     else
       echo "  FAIL $miss 返回 HTTP $CODE —— 部署名单漏了东西，答案或门禁被服务出去了" >&2
       FAILED=1
-      note fail "部署形状下 $miss 竟然可达（$CODE）"
+      note fail "部署形状下 $miss 竟然可达（${CODE}）"
     fi
   done
   if [ -n "$PRESERVED" ]; then
@@ -318,11 +318,11 @@ if [ "$LIVELEG" = 1 ]; then
   for miss in "${LIVE}tools/golden.mjs" "${LIVE}tools/scenarios.js" "${LIVE}DESIGN.md" "${LIVE}server.cjs"; do
     CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 8 "$miss" 2>/dev/null)
     if [ "$CODE" = 404 ]; then
-      echo "  ok  线上够不到 $miss（HTTP $CODE，答案与门禁脚本都不在部署名单里）"
+      echo "  ok  线上够不到 ${miss}（HTTP ${CODE}，答案与门禁脚本都不在部署名单里）"
     else
       echo "  FAIL 线上 $miss 返回 HTTP $CODE —— pages.yml 的名单漏了东西" >&2
       FAILED=1
-      note fail "线上 $miss 竟然可达（$CODE）"
+      note fail "线上 $miss 竟然可达（${CODE}）"
     fi
   done
 elif [ "$LOCAL" = 1 ]; then
@@ -331,7 +331,7 @@ elif [ "$LOCAL" = 1 ]; then
   echo "    BASE_URL=$LIVE bash tools/verify.sh"
   echo "  那一趟没有本地替身根（LOCAL=0），读的是 Pages 真部署过的那份字节——第 5 段替代不了它。"
 else
-  echo "=== url-shape 3/3：既不是本机根，也不是线上站点（BASE_URL=$BASE）==="
+  echo "=== url-shape 3/3：既不是本机根，也不是线上站点（BASE_URL=${BASE}）==="
   echo "  这一跑按那个 BASE 的形态算（CI 的前缀腿用的就是这条路）：LOCAL=0，第 5 段跳过。"
 fi
 
