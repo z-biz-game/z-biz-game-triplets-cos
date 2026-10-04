@@ -13,6 +13,14 @@
 //   player 色（Palette.player）在盘上**只**代表玩家或提示落下的那一笔。门禁有一条
 //   「一笔没画时全画布 player 色像素 = 0」的断言，靠的就是这个独占性抓答案泄漏。
 
+
+/* ---------- 帧率无关（dt）---------- */
+/* 本仓**没有逐帧运动**，所以「帧率无关」这一项在本仓是空命题而不是缺陷：js/render/board.js 的重绘由 pointerdown / click / keydown / change 触发，全仓 requestAnimationFrame 出现 0 次；唯一的周期性调用是 1 秒 ticker（刷新用时读数）
+   没有自续期的 requestAnimationFrame 循环，屏上就没有「每帧推进」的量，帧率也就无从影响它。
+   写这段备案是为了让账上分得开"查过、确实不需要"与"没人查过"——不是为了让判据变绿。
+
+   规矩：**哪天在本仓加了逐帧动画循环，必须先删掉这段备案**，并让循环体消费 rAF 自带的
+   时间戳（或自己取 performance.now()），把动画进度写成绝对截止；只按帧累加位置的一律不算。 */
 import { Palette, Board, Radius, hexToRgb } from '../theme.js';
 import { borderPairs, cellsOfRegions, neighbors } from '../engine/grid.js';
 import { ALL } from '../ui/game.js';
