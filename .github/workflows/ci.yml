@@ -35,7 +35,7 @@ jobs:
           set -eo pipefail
           npm test 2>&1 | tee /tmp/npmtest.log
           n=$(grep -cE '^RESULT' /tmp/npmtest.log)
-          echo "RESULT 行数 = $n（必须是 7）"
+          echo "RESULT 行数 = ${n}（必须是 7）"
           [ "$n" = 7 ]
           grep -E '^RESULT' /tmp/npmtest.log
           ! grep -qE 'ok=false|fails=[1-9]' /tmp/npmtest.log
