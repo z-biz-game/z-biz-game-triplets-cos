@@ -8,3 +8,4 @@ tools/shots/
 # 临时探针一律用 _tmp- 前缀（不许丢进 /tmp，那里会被系统自动清掉），提交前删干净。
 # 这条 ignore 是安全带，不是许可证：门禁只跑没有 _tmp- 前缀的文件（tools/check.mjs 的 SKIP）。
 _tmp-*
+_scratch/
