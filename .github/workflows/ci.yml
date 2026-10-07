@@ -69,6 +69,12 @@ jobs:
       - name: Deploy set gate proves it can fail
         run: node tools/deploy-set-selftest.mjs
 
+      # 文档行号对账：README / DESIGN 里每一个 `path:NN` 都要指得回实处（文件在、行号在界内、
+      # 那几行不是整段空行、贴着引用的名字真的在那几行里）。这一条与 npm test 那七套分开跑：
+      # 那个「RESULT 行数 = 7」的判据钉的是引擎套数，把它改成 8 就等于把两件事捆成一件。
+      - name: Doc citations reconcile (1 suite)
+        run: node tools/docs-test.mjs
+
   # 真浏览器闸：headless Chrome + CDP，读 DOM 矩形/文本与画布像素，落子一律真指针事件，
   # 不调引擎方法。两种 URL 形态各跑一遍：根形态（本机 npm start 的形状）和 Pages 的
   # /<仓库名>/ 前缀形态。同组织已经因为只测根形态红过一次（部署站 404、本地闸全绿）。

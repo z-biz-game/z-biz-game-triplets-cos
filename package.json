@@ -9,6 +9,7 @@
   },
   "scripts": {
     "check": "node tools/check.mjs",
+    "doctest": "node tools/docs-test.mjs",
     "test": "node tools/rule-test.mjs && node tools/pencil-test.mjs && node tools/counter-test.mjs && node tools/generator-probe.mjs && node tests/a5-contradiction.test.mjs && node tests/c1-irreducible.test.mjs && node tests/rule-subsumption.test.mjs",
     "balance": "node tools/balance.mjs",
     "ceiling": "node tools/ceiling.mjs",
