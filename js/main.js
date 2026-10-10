@@ -425,27 +425,6 @@ function afterWrite(cell, rec) {
 //   静音 → sfx.setMuted(true) 真把 AudioContext suspend()，之后 tone() 在建节点之前就返回；
 //   全屏 → requestFullscreen 打在盘上真实存在的 #app 上，接口缺失时说的是实话不是死寂；
 //   重开 → 同一张题面（seed / 尺寸不动），其余与时间有关的东西全归零，shellReadout() 给前后读数。
-function setPaused(v, { announceIt = true } = {}) {
-  const next = !!v;
-  const changed = paused !== next;
-  paused = next;
-  simClock.setPaused(paused);
-  sfx.hold(paused); // 暂停期间真的没有声音：上下文挂起，恢复时（没静音才）放回来
-  const btn = $('btn-pause');
-  if (btn) {
-    btn.setAttribute('aria-pressed', paused ? 'true' : 'false');
-    btn.textContent = paused ? '▶ 继续' : '‖ 暂停';
-  }
-  const chip = $('stat-paused');
-  if (chip) chip.hidden = !paused;
-  paintGlow();
-  if (changed && announceIt) {
-    announce(paused
-      ? `已暂停：秒表停在 ${clockText()}，仿真一步都不走（simSteps=${simClock.simSteps}），盘面不接受任何一笔。按 P 继续。`
-      : `继续：秒表从 ${clockText()} 接着走。`);
-  }
-  return paused;
-}
 const togglePause = () => setPaused(!paused);
 
 function setMuted(v) {
