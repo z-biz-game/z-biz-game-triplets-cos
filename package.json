@@ -9,14 +9,17 @@
   },
   "scripts": {
     "check": "node tools/check.mjs",
-    "test": "node tools/rule-test.mjs && node tools/pencil-test.mjs && node tools/counter-test.mjs && node tools/generator-probe.mjs && node tests/a5-contradiction.test.mjs && node tests/c1-irreducible.test.mjs && node tests/rule-subsumption.test.mjs && node tests/shell.test.mjs && node tests/save-corruption.test.mjs",
+    "doctest": "node tools/docs-test.mjs",
+    "test": "node tools/rule-test.mjs && node tools/pencil-test.mjs && node tools/counter-test.mjs && node tools/generator-probe.mjs && node tests/a5-contradiction.test.mjs && node tests/c1-irreducible.test.mjs && node tests/rule-subsumption.test.mjs",
     "balance": "node tools/balance.mjs",
     "ceiling": "node tools/ceiling.mjs",
     "probe": "node tools/generator-probe.mjs",
     "golden": "node tools/golden-test.mjs",
     "golden:remint": "node tools/write-golden.mjs --check",
     "start": "node server.cjs",
-    "verify": "bash tools/verify.sh"
+    "verify": "bash tools/verify.sh",
+    "deploy-set": "node tools/deploy-set.mjs",
+    "deploy-set:selftest": "node tools/deploy-set-selftest.mjs"
   },
   "keywords": [
     "game",

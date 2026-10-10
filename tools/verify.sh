@@ -68,7 +68,7 @@ run() { # run <名字> <命令…>：一步红就把 FAILED 抬起来，并且�
   if "$@"; then
     echo "  ok  $name"
   else
-    echo "  FAIL $name（exit $?）" >&2
+    echo "  FAIL ${name}（exit $?）" >&2
     FAILED=1
     note fail "$name 这一步没过"
   fi
@@ -97,9 +97,9 @@ for line in open('$UNIT_LOG'):
 print('  npm test：%d 套，合计 %d 条断言，红 %d 条' % (suites, tot, fails))
 sys.exit(0 if (suites >= 7 and fails == 0 and tot > 0) else 1)
 "; then
-    [ $UEXIT -eq 0 ] || { echo "  FAIL npm test 退出码 $UEXIT，但 RESULT 行看起来是绿的——查日志 $UNIT_LOG" >&2; FAILED=1; }
+    [ $UEXIT -eq 0 ] || { echo "  FAIL npm test 退出码 ${UEXIT}，但 RESULT 行看起来是绿的——查日志 $UNIT_LOG" >&2; FAILED=1; }
   else
-    echo "  FAIL npm test 这一趟不够七套、或有红、或读不出数（exit=$UEXIT，见 $UNIT_LOG）" >&2
+    echo "  FAIL npm test 这一趟不够七套、或有红、或读不出数（exit=${UEXIT}，见 ${UNIT_LOG}）" >&2
     FAILED=1
     note fail "npm test 七套没过或套数不足"
   fi
@@ -108,7 +108,17 @@ sys.exit(0 if (suites >= 7 and fails == 0 and tot > 0) else 1)
   node tools/golden-test.mjs >"$GOLDEN_LOG" 2>&1
   GEXIT=$?
   grep -E '^RESULT' "$GOLDEN_LOG" | sed 's/^/  /' || true
-  [ $GEXIT -eq 0 ] || { echo "  FAIL golden-test exit=$GEXIT（见 $GOLDEN_LOG）" >&2; FAILED=1; note fail 'golden-test 红'; }
+  [ $GEXIT -eq 0 ] || { echo "  FAIL golden-test exit=${GEXIT}（见 ${GOLDEN_LOG}）" >&2; FAILED=1; note fail 'golden-test 红'; }
+  # 文档行号对账：本文印着的每一个 `path:NN` 都被读回来对账（口径与家族其余几份同源）。
+  # 它不在 npm test 的链里——那条链的形状另有「RESULT 行数 = 7」的判据压着；这套与 golden-test 一样
+  # 由本地整闸与 CI 各跑一次，docs-test 的 D9d 那条断言钉的就是"两边不能各改各的"。
+  echo "=== unit: 文档行号对账（本文每一个 path:NN 都得指得回实处）==="
+  run docs node tools/docs-test.mjs
+  # 部署集闸：ci.yml 跑这两步、本地整闸以前一次都不跑（59 仓同形）。「本地全绿、线上 404 自己的
+  # manifest / sw.js / 图标」这一类坏法缺的就是这一步。它不碰 Chrome，所以进 run 这一档就够了。
+  echo "=== unit: 部署集闸（页面要取的东西必须在产物里）==="
+  run deploy-set node tools/deploy-set.mjs
+  run deploy-set-selftest node tools/deploy-set-selftest.mjs
 fi
 
 # ── 2. 起服 + 标题身份证据 ────────────────────────────────────────────────────────────
@@ -246,16 +256,9 @@ if [ "$LOCAL" = 1 ]; then
   echo "=== url-shape 2/3：Pages 前缀 /$REPO/ + 按 pages.yml 名单搭出来的部署形状 ==="
   PROOT=$(mktemp -d)
   mkdir -p "$PROOT/$REPO"
-  ln -s "$HERE/index.html" "$PROOT/$REPO/index.html"
-  ln -s "$HERE/css" "$PROOT/$REPO/css"
-  ln -s "$HERE/js" "$PROOT/$REPO/js"
-  ln -s "$HERE/manifest.webmanifest" "$PROOT/$REPO/manifest.webmanifest"
-  ln -s "$HERE/sw.js" "$PROOT/$REPO/sw.js"
-  ln -s "$HERE/icons" "$PROOT/$REPO/icons"
-  # 和 pages.yml 同形状：assets/ 只挂站点真正要用的 textures 与 img，gen/（Python 生成器）不发。
-  mkdir -p "$PROOT/$REPO/assets"
-  ln -s "$HERE/assets/textures" "$PROOT/$REPO/assets/textures"
-  ln -s "$HERE/assets/img" "$PROOT/$REPO/assets/img"
+  # 替身根从那一份清单生成——pages.yml 与部署集闸调的都是这支脚本；手抄的 ln -s 只带 index.html/css/js，
+  # PWA 轮接上 manifest.webmanifest、sw.js、icons/ 之后这条腿量的就不是上线那一份了（行数不变，引用不漂）。
+  bash "$HERE/tools/assemble-site.sh" "$PROOT/$REPO"
   PRE="http://127.0.0.1:$HTTP/$REPO/"
   kill $SPID 2>/dev/null
   SPID=0
@@ -267,17 +270,17 @@ if [ "$LOCAL" = 1 ]; then
     sleep 0.25
   done
   PRESERVED=$(curl -fsS -m 3 "$PRE" 2>/dev/null || true)
-  case "$PRESERVED" in *js/main.js*) ;; *) echo "  FAIL 前缀形状下拿不到本仓 index.html：$PRE（见 /tmp/triplets-prefix-server.log）" >&2; FAILED=1 ;; esac
+  case "$PRESERVED" in *js/main.js*) ;; *) echo "  FAIL 前缀形状下拿不到本仓 index.html：${PRE}（见 /tmp/triplets-prefix-server.log）" >&2; FAILED=1 ;; esac
   # 反证：部署名单里没有 tools/，所以答案文件在线上必须够不到。本地替它兜底就等于门禁在
   # 给被测对象自己打的补丁做见证，那这条腿永远红不了。
   for miss in "$PRE"tools/golden.mjs "$PRE"tools/scenarios.js "http://127.0.0.1:$HTTP/tools/golden.mjs" "$PRE"DESIGN.md "$PRE"assets/gen/gen_art.py; do
     CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 3 "$miss" 2>/dev/null)
     if [ "$CODE" = 404 ]; then
-      echo "  ok  够不到 $miss（HTTP $CODE，答案与门禁脚本都不在线上产物里）"
+      echo "  ok  够不到 ${miss}（HTTP ${CODE}，答案与门禁脚本都不在线上产物里）"
     else
       echo "  FAIL $miss 返回 HTTP $CODE —— 部署名单漏了东西，答案或门禁被服务出去了" >&2
       FAILED=1
-      note fail "部署形状下 $miss 竟然可达（$CODE）"
+      note fail "部署形状下 $miss 竟然可达（${CODE}）"
     fi
   done
   # 正向那半：名单里的 PWA 与位图必须真在前缀下够得到。manifest 404 = 装了标签也不给安装，
@@ -321,11 +324,8 @@ if [ "$LOCAL" = 1 ]; then
     BASE_URL=$PRE node tools/playtest.cjs scenario boot 2>/tmp/triplets-prefix-boot.console.log | tail -1 | sed 's/^RESULT //' | parse_row "prefix-boot" || FAILED=1
     export BASE_URL=$BASE
   fi
-  rm -f "$PROOT/$REPO/index.html" "$PROOT/$REPO/css" "$PROOT/$REPO/js" \
-    "$PROOT/$REPO/manifest.webmanifest" "$PROOT/$REPO/sw.js" "$PROOT/$REPO/icons" \
-    "$PROOT/$REPO/assets/textures" "$PROOT/$REPO/assets/img"
-  rmdir "$PROOT/$REPO/assets" 2>/dev/null
-  rmdir "$PROOT/$REPO" "$PROOT" 2>/dev/null
+  rm -rf "$PROOT/$REPO"  # css/ 与 js/ 是 assemble-site.sh 拷出来的真目录，rm -f 对着目录只会报错、清场清不净
+  rmdir "$PROOT" 2>/dev/null
   # 符号链接交回给系统：$PROOT 已经空了，清掉之后 cleanup 那一趟就不必再碰它。
   PROOT=""
 fi
@@ -341,11 +341,11 @@ if [ "$LIVELEG" = 1 ]; then
   for miss in "${LIVE}tools/golden.mjs" "${LIVE}tools/scenarios.js" "${LIVE}DESIGN.md" "${LIVE}server.cjs"; do
     CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 8 "$miss" 2>/dev/null)
     if [ "$CODE" = 404 ]; then
-      echo "  ok  线上够不到 $miss（HTTP $CODE，答案与门禁脚本都不在部署名单里）"
+      echo "  ok  线上够不到 ${miss}（HTTP ${CODE}，答案与门禁脚本都不在部署名单里）"
     else
       echo "  FAIL 线上 $miss 返回 HTTP $CODE —— pages.yml 的名单漏了东西" >&2
       FAILED=1
-      note fail "线上 $miss 竟然可达（$CODE）"
+      note fail "线上 $miss 竟然可达（${CODE}）"
     fi
   done
 elif [ "$LOCAL" = 1 ]; then
@@ -354,7 +354,7 @@ elif [ "$LOCAL" = 1 ]; then
   echo "    BASE_URL=$LIVE bash tools/verify.sh"
   echo "  那一趟没有本地替身根（LOCAL=0），读的是 Pages 真部署过的那份字节——第 5 段替代不了它。"
 else
-  echo "=== url-shape 3/3：既不是本机根，也不是线上站点（BASE_URL=$BASE）==="
+  echo "=== url-shape 3/3：既不是本机根，也不是线上站点（BASE_URL=${BASE}）==="
   echo "  这一跑按那个 BASE 的形态算（CI 的前缀腿用的就是这条路）：LOCAL=0，第 5 段跳过。"
 fi
 
