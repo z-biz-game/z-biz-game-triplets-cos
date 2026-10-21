@@ -5,18 +5,37 @@
 <!-- 不写 <base>：页面既要在 http://host/ 下跑，也要在 GitHub Pages 的 /z-biz-game-triplets-cos/
      前缀下跑。所有资源都用相对路径，动态 import 走 document.baseURI，硬编的 "/" 会在
      前缀形状下把 css 和引擎全部 404 掉。 -->
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" /><meta name="twitter:card" content="summary">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#070A14" />
 <title>同或异 · Triplets</title>
-<meta name="description" content="同或异 Triplets（Naoki Inaba）：盘面切成每块恰好三格的区域，每块要么三个同号、要么三个全异，跨区相邻的两格必须不同。出货的每一盘都由独立穷举计数器数过唯一解、铅笔求解器在零猜测下推得完，判胜只由引擎的 verify() 说了算。" /><meta property="og:title" content="同或异 · Triplets"><meta property="og:description" content="同或异 Triplets（Naoki Inaba）：盘面切成每块恰好三格的区域，每块要么三个同号、要么三个全异，跨区相邻的两格必须不同。出货的每一盘都由独立穷举计数器数过唯一解、铅笔求解器在零猜测下推得完，判胜只由引擎的 verify() 说了算。"><meta property="og:image" content="https://z-biz-game.github.io/z-biz-game-triplets-cos/icons/icon-512.png"><meta name="twitter:image" content="https://z-biz-game.github.io/z-biz-game-triplets-cos/icons/icon-512.png">
-<!-- Inline icon: without it the browser probes the domain root for /favicon.ico and logs a 404. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23101828'/%3E%3Crect x='5' y='9' width='7' height='7' fill='%232ED573'/%3E%3Ccircle cx='16' cy='12.5' r='3.6' fill='%23F2F5FB'/%3E%3Cpath d='M25 8.6l4 7.4h-8z' fill='%23B8A88F'/%3E%3Cpath d='M4 21h24' stroke='%234E74C8' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E" />
+<meta name="description" content="同或异 Triplets（Naoki Inaba）：盘面切成每块恰好三格的区域，每块要么三个同号、要么三个全异，跨区相邻的两格必须不同。出货的每一盘都由独立穷举计数器数过唯一解、铅笔求解器在零猜测下推得完，判胜只由引擎的 verify() 说了算。" />
+<!-- 图标是盘上的真位图（python3 assets/gen/gen_art.py 铸的，tools/check-assets.mjs 逐张验
+     PNG 签名/IHDR/sha256）。不用 data-URI 的手画 SVG：那张既装不到桌面，也上不了商店截图。
+     页面上只挂这一份图标——同一个图标挂两次，浏览器先取哪一张说不准。 -->
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="96x96" href="icons/icon-96.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
+<link rel="manifest" href="manifest.webmanifest" />
 <link rel="stylesheet" href="css/game.css" />
-
-  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="同或异" />
+<!-- og:image 要绝对地址：社交爬虫不会拿页面 URL 去解析相对路径，
+     更不会替 Pages 补 /z-biz-game-triplets-cos/ 前缀（tools/deploy-set.mjs 的 R7 按这条盯）。 -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="同或异 Triplets" />
+<meta property="og:title" content="同或异 · Triplets —— 三格区域的推理" />
+<meta property="og:description" content="每块区域恰好三格：要么三个同号、要么三个全异；跨区相邻的两格必须不同。每一盘都被独立穷举计数器数过唯一解。" />
+<meta property="og:url" content="https://z-biz-game.github.io/z-biz-game-triplets-cos/" />
+<meta property="og:image" content="https://z-biz-game.github.io/z-biz-game-triplets-cos/assets/img/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="同或异 · Triplets" />
+<meta name="twitter:description" content="三格区域的推理：同或全异，跨区相邻必不同。" />
+<meta name="twitter:image" content="https://z-biz-game.github.io/z-biz-game-triplets-cos/assets/img/og-image.png" />
 </head>
 <body>
 <div id="app">
@@ -33,6 +52,11 @@
     <div class="top-actions">
       <span id="stat-face" class="chip mono" title="题面给的东西：几块三格区域、几颗预先填好的符号">区域 — · 线索 —</span>
       <button id="btn-pause" class="ghost" type="button" aria-pressed="false" title="暂停 / 继续 (P)">暂停</button>
+      <!-- 静音这颗按钮以前被并线裁掉了，而 js/main.js 还在 $('btn-mute') 上挂 click：
+           页面里没有这个 id ⇒ getElementById 返回 null ⇒ 模块加载到那一行就抛 TypeError，
+           整局游戏连菜单都出不来。按钮补回来，键位（M）才有着落。 -->
+      <button id="btn-mute" class="chip hud-btn" type="button" aria-pressed="false"
+        title="静音 / 恢复音效 (M)：真的把 AudioContext 挂起，静音态下不会再新建任何发声节点">♪ 声音</button>
       <button id="btn-fullscreen" class="ghost" type="button" aria-pressed="false" title="全屏（F）">全屏</button></div>
   </header>
 

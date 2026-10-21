@@ -449,3 +449,45 @@ a[href],
   min-height: 44px !important;
   min-width: 44px !important;
 }
+
+/* ============================================================
+   并线补回：全屏与沉浸式 / prefers-reduced-motion
+   这两段在"有机并线"里被裁掉了。少了第一段，全屏时 UA 在 :fullscreen 根上铺黑，
+   页面渐变没了、宽度上限也还在；少了第二段，系统级的"少动效"只剩 JS 那半边
+   （theme.js 管 --fx-glow 那一笔），CSS 自己的动画照旧播。
+   全屏的目标元素是 #app（js/main.js 的 fsElement），所以这段规则也认 #app。
+   ============================================================ */
+
+/* ---------- 全屏与沉浸式 ----------------------------------------------------------------
+   :fullscreen 的根节点丢掉页面渐变（UA 会铺黑），所以补一层同款底色；同时把宽度上限放开，
+   让 12×12 那一档在横屏上多要几十像素的格子边长。全屏按钮绑的是 index.html 里真存在的
+   #btn-fullscreen，退出走 fullscreenchange 同步 aria-pressed，不靠猜。 */
+#app:fullscreen,
+#app:-webkit-full-screen {
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 62%, var(--surface) 100%);
+  max-width: none;
+  overflow: auto;
+}
+
+/* 全屏时系统状态条没了，但 home 指示条还在：env() 继续算数。 */
+.foot {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.panel,
+.stage {
+  padding-left: max(var(--space-card), env(safe-area-inset-left));
+  padding-right: max(var(--space-card), env(safe-area-inset-right));
+}
+
+/* ---------- prefers-reduced-motion ------------------------------------------------------
+   这不是装饰性的一条：js/fx.js 里的光晕、胜利卡片的弹入、按钮的按压位移都会被关掉，
+   标题态退化成静图。JS 侧还有同一个判据（theme.js 的 prefersReducedMotion()），两边
+   各关各的：CSS 管它自己的动画，JS 管它自己每帧写进 --fx-glow 的那一笔。 */
+@media (prefers-reduced-motion: reduce) {
+  #board { box-shadow: 0 0 8px rgba(123, 184, 255, 0.12); }
+  .win-card { animation: none; }
+  button { transition: none; }
+  button:active { transform: none; }
+  * { scroll-behavior: auto; }
+}

@@ -157,11 +157,23 @@ function knife(tag, want, mutate, note) {
 let bad = 0;
 
 // X1 清单落后于页面：assemble 少收一类文件，产物里没有它而页面会去要。
-// 有位图目录（这一仓 55/59 走 icons/，2 个走 assets/）就砍那个 for 循环，期望由靶子自己决定，
-// 两个目录名都在针里；内联位图的仓没有位图目录可砍，就砍无条件那行的 css。
+// 有位图目录就砍那个 for 循环，期望由靶子自己决定；内联位图的仓没有位图目录可砍，
+// 就砍无条件那行的 css。
+//
+// 针从**仓里现取**那行循环，不写死目录名：清单里收哪几个位图目录是这一仓自己的事
+// （icons/ 与 assets/textures、assets/img 的分布各仓不同），针一旦写死，改清单的人就会
+// 先撞上"针打空"，而那一刀本该证明的是闸还在看东西。
+const assembleLoopNeedle = (() => {
+  const t = fs.readFileSync(path.join(ROOT, 'tools/assemble-site.sh'), 'utf8');
+  const m = t.match(/for d in icons[^;]*; do/);
+  return m ? m[0] : '';
+})();
 if (pngRefs.length) {
-  if (!knife('X1 assemble 不收位图目录', ['R10', path.basename(pngRefs[0].target)], (dir) => {
-    edit(dir, 'tools/assemble-site.sh', 'for d in icons assets; do', 'for d in probe_missing_dir; do');
+  if (!assembleLoopNeedle) {
+    line('X1 INERT · tools/assemble-site.sh 里找不到收位图目录的那行循环，针无处落脚');
+    bad += 1;
+  } else if (!knife('X1 assemble 不收位图目录', ['R10', path.basename(pngRefs[0].target)], (dir) => {
+    edit(dir, 'tools/assemble-site.sh', assembleLoopNeedle, 'for d in probe_missing_dir; do');
   })) bad += 1;
 } else {
   if (!cssRefInArtifact) {

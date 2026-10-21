@@ -17,9 +17,16 @@ cd "$HERE" || exit 2
 # 进站点的：玩家浏览器会去要的东西，一个都不落。
 cp index.html manifest.webmanifest sw.js "$DEST/"
 cp -r css js "$DEST/"
-# 位图目录名不统一（icons/ 与 assets/ 都在用）：按存在与否收，缺的那个不是错误。
-for d in icons assets; do
+# 位图目录：icons/ 是图标与 apple-touch-icon。assets/ 下**只有** textures/ 与 img/ 是运行时
+# 真要的（盘面纹理、社交卡、品牌 sprite）；gen/ 是 Python 出图脚本、manifest.json 是它的
+# 清单——两者都不进站点：tools/verify.sh 的部署形状腿正反着查 assets/gen/gen_art.py 必须 404，
+# 而把整个 assets/ 拷上去就正好把它递出去了。
+for d in icons; do
   [ -d "$d" ] && cp -r "$d" "$DEST/"
+done
+mkdir -p "$DEST/assets"
+for d in textures img; do
+  [ -d "assets/$d" ] && cp -r "assets/$d" "$DEST/assets/"
 done
 
 # 不进站点的（有意为之，别"顺手加上"）：

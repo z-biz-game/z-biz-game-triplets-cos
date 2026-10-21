@@ -72,6 +72,7 @@ let noteSym = 0; // 笔记那支笔翻的是哪个符号（1/2/3 在笔记笔下
 let brandFrame = 0; // 品牌 sprite 现在停在哪一帧（0/1/2 = ■/●/▲）；擦掉笔沿用上一帧
 let cursor = -1; // 键盘光标；指针玩家永远看不到它（-1）
 let clockBase = 0; // 这一局已经走到的毫秒（存档恢复时带回来的那截，不参与仿真）
+let clockStart = 0; // 秒表的起点（performance.now，只用来读秒，不参与判断；暂停时它是 0）
 let announceT = 0;
 const state = { state: 'boot' };
 
@@ -106,9 +107,15 @@ function resetClock(baseMs = 0) {
   clockStart = performance.now();
   // 换一局＝新的一局，新局一定在走：带着上一局的 paused=true 进来会让时钟和按钮各说各话
   if (paused) { paused = false; paintPause(); }
+  // 仿真钟也归零：换一局不归零的话，新局的读数会从上一局的时间接着走。
+  // 放在解暂停**之后**：reset({paused}) 会把仿真钟的暂停态一起设掉，先解再归零，
+  // 两台钟的状态才是一致的（反过来会留下"界面说在走、仿真钟冻着"的那一半）。
+  simClock.reset({ paused });
+  lastClockText = '';
 }
-// 秒表 = 存档带回来的那一截 + 定步长累加出来的 simTime。暂停时 FrameClock 一步都不走，
+// 秒表 = 存档带回来的那一截 + 本段墙钟跑过的时长。暂停时 clockStart 被清零，
 // 所以这一句在暂停态恒等于按下 P 那一刻的值 —— 不是「看起来停住了」，是它没有别的时间源可吃。
+// （仿真钟 js/fx.js 那一台管的是光晕与 simSteps，暂停时它也一步都不走；两台钟一起停。）
 function elapsedMs() {
   // clockStart 是哨兵：暂停时它是 0，还去减 performance.now() 会凭空多出整段虚拟时间
   return clockBase + (clockStart ? Math.max(0, performance.now() - clockStart) : 0);
@@ -119,25 +126,43 @@ function elapsedMs() {
 // 再把 clockStart 清零 —— elapsedMs() 于是恒等于 clockBase，一毫秒都不再涨。
 // 恢复时重新盖上 clockStart，时钟从冻结处续走；因为 clockBase 已经是累计值，
 // 恢复后第一帧的 dt 就是一个正常帧间隔，不会把暂停那几秒一次性吃掉（不跳步）。
-let paused = false;
-function setPaused(next) {
-  next = !!next;
-  if (paused === next) return paused;
-  if (next) {
-    clockBase = elapsedMs();   // 先结算到此刻，再停表
-    clockStart = 0;
-  } else {
-    clockStart = performance.now();
+function setPaused(v, { announceIt = true } = {}) {
+  const next = !!v;
+  const changed = paused !== next;
+  if (changed) {
+    if (next) {
+      clockBase = elapsedMs();   // 先结算到此刻，再停表
+      clockStart = 0;
+    } else {
+      clockStart = performance.now();
+    }
+    paused = next;
   }
-  paused = next;
+  // 仿真钟也停：这一句是「暂停 = 冻结」的另一半。少了它，光晕照转、simSteps 照涨，
+  // 而秒表停着——两台钟各说各话，正是这个文件顶上那条纪律不许发生的事。
+  simClock.setPaused(paused);
+  // 暂停期间真的没有声音：上下文挂起，恢复时（没静音才）放回来。
+  // 标签页在后台时同样要挂住，所以这里问的是「暂停 **或** 看不见」。
+  sfx.hold(paused || !!(document.hidden || document.webkitHidden));
   paintPause();
+  paintGlow();
+  if (changed && announceIt) {
+    announce(paused
+      ? `已暂停：秒表停在 ${clockText()}，仿真一步都不走（simSteps=${simClock.simSteps}），盘面不接受任何一笔。按 P 继续。`
+      : `继续：秒表从 ${clockText()} 接着走。`);
+  }
   return paused;
 }
 function paintPause() {
   const btn = document.getElementById('btn-pause');
-  if (!btn) return;
-  btn.textContent = paused ? '继续' : '暂停';
-  btn.setAttribute('aria-pressed', paused ? 'true' : 'false');
+  if (btn) {
+    btn.textContent = paused ? '继续' : '暂停';
+    btn.setAttribute('aria-pressed', paused ? 'true' : 'false');
+  }
+  // 顶栏那枚「‖ 已暂停」芯片：它不是按钮，是状态读数——暂停时它必须在屏上，
+  // 否则玩家只看见按钮换了字，不知道这一局已经停表。
+  const chip = document.getElementById('stat-paused');
+  if (chip) chip.hidden = !paused;
 }
 function clockText() {
   const s = Math.floor(elapsedMs() / 1000);
@@ -444,30 +469,40 @@ function setMuted(v) {
 const toggleMute = () => setMuted(!sfx.muted);
 
 const fsElement = () => document.getElementById('app') || document.documentElement;
-const fsSupported = () => {
+// 只做特性检测，不嗅探 UA：iOS Safari 是 webkitRequestFullscreen，老 Edge 是 ms 前缀，
+// 而 UA 字符串随时会改。"有没有这个能力"是查出来的，不是猜出来的。
+const fsRequest = () => {
   const el = fsElement();
-  return !!(el && (el.requestFullscreen || el.webkitRequestFullscreen));
+  return el && (el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen);
 };
-const fsActive = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+const fsExit = () => document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+const fsSupported = () => !!fsRequest();
+const fsActive = () => !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
 function syncFsBtn() {
   const btn = $('btn-fullscreen');
   if (!btn) return;
   const on = fsActive();
   btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   btn.textContent = on ? '⛶ 退出全屏' : '⛶ 全屏';
+  // 不支持也要给个说法：只把按钮灰掉而不解释，玩家会以为这功能没做完。
+  if (!fsSupported()) {
+    btn.disabled = true;
+    btn.title = '这个浏览器不提供元素全屏（iOS Safari 请用「添加到主屏幕」独立打开）';
+  }
 }
 function toggleFullscreen() {
   const el = fsElement();
   if (!el) return false;
   if (fsActive()) {
-    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    const exit = fsExit();
     if (!exit) return false;
     Promise.resolve(exit.call(document)).catch(() => announce('退出全屏被系统挡掉了。'));
     syncFsBtn();
     return true;
   }
-  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  const req = fsRequest();
   if (!req) {
+    syncFsBtn();
     announce('这台设备没给出全屏接口（requestFullscreen 不存在），不是按钮坏了。');
     return false;
   }
@@ -647,9 +682,10 @@ function typeKey(ev) {
     return;
   }
   if (k === 'p' || k === 'P') {
-    // 空格已被上面的落子占用，同键两义会一按两响，暂停只挂 P
+    // 空格已经占了两义（还没落光标时是暂停/继续，落了光标时是落子），所以暂停只挂 P。
+    // 这一段在下面那段「P 键」之前：先接住 P，别让它掉到后面去。
     ev.preventDefault();
-    setPaused(!paused);
+    togglePause();
     return;
   }
   if (k === 'Enter' || k === ' ' || k === 'Spacebar') {
@@ -670,11 +706,6 @@ function typeKey(ev) {
     ev.preventDefault();
     if (paused) { announce('已暂停：这一局不接受任何一笔（按 P 继续）。'); return; }
     afterWrite(cursor, applyCell(cursor, { erase: true }));
-    return;
-  }
-  if (k === 'p' || k === 'P') {
-    ev.preventDefault();
-    togglePause();
     return;
   }
   if (k === 'm' || k === 'M') {
@@ -840,7 +871,8 @@ $('btn-close-veil').addEventListener('click', () => {
 });
 $('btn-hint').addEventListener('click', hint);
 $('btn-restart').addEventListener('click', restartCurrent);
-$('btn-pause').addEventListener('click', togglePause);
+// #btn-pause 的 click 在下面那段 bindPause() 里装：同一颗按钮挂两个 click，
+// 第一次 click 把它暂停了、第二次 click 紧接着又把它放开了——按了没反应。
 $('btn-mute').addEventListener('click', toggleMute);
 $('btn-fullscreen').addEventListener('click', toggleFullscreen);
 // 首手势解锁 AudioContext：浏览器只允许在用户手势之后起播，所以 sfx 里构造时不建上下文。
@@ -1034,75 +1066,4 @@ state.state = 'boot';
   const g = resumeLast();
   if (g) return;
   newGame(currentSize());
-})();
-
-// ---- 全屏开关（#btn-fullscreen）----
-// 绑的是本页 HUD 上真实存在的那个按钮。全屏最常见的假实现就是引用一个并不存在的
-// id：点下去什么也不会发生，量具却算它"已实现"。所以这里找不到按钮就直接不装。
-(function bindFullscreen() {
-  const btn = document.getElementById('btn-fullscreen');
-  if (!btn) return;
-  const root = document.documentElement;
-  // 只做特性检测，不嗅探 UA：iOS Safari 是 webkitRequestFullscreen，老 Edge 是 ms 前缀，
-  // 而 UA 字符串随时会改。"有没有这个能力"是查出来的，不是猜出来的。
-  const req = root.requestFullscreen || root.webkitRequestFullscreen || root.msRequestFullscreen;
-  const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-  const current = () => document.fullscreenElement || document.webkitFullscreenElement
-    || document.msFullscreenElement || null;
-
-  // 不支持也要给个说法：只把按钮灰掉而不解释，玩家会以为这功能没做完。
-  // supported 这枚标记不能省：下面 sync() 每次都会重写 title，不挡住的话，装的时候刚写
-  // 进去的人话原因会被随后的 sync() 立刻抹成"全屏 (F)"——禁用就变成一句没有理由的禁用。
-  let supported = !!req;
-  const unsupported = () => {
-    supported = false;
-    btn.disabled = true;
-    btn.title = '这个浏览器不提供元素全屏（iOS Safari 请用「添加到主屏幕」独立打开）';
-  };
-  if (!req) unsupported();
-
-  // fullscreen 返回 Promise，被拒时必须吃掉：iOS Safari 对多数非 video 元素直接拒绝，
-  // 让这个 rejection 冒泡出去会变成一条未捕获错误，整局游戏跟着挂。
-  const settle = (p) => { if (p && p.catch) p.catch(unsupported); };
-
-  // 进出都能走：已经全屏时这次调用是退出，不是"再进一次"。
-  function toggle() {
-    try {
-      if (current()) {
-        if (exit) settle(exit.call(document));
-      } else if (req) {
-        settle(req.call(root));
-      } else {
-        unsupported();
-      }
-    } catch (e) {
-      unsupported();
-    }
-  }
-
-  // Esc 和系统手势退出都不经过我们的代码，按钮状态只能靠 fullscreenchange 回写，
-  // 否则用户已经退出、HUD 还停在"退出全屏"，下一次点击反而会重新进全屏。
-  function sync() {
-    const on = !!current();
-    btn.setAttribute('aria-pressed', String(on));
-    btn.textContent = on ? "退出全屏" : "全屏";
-    if (supported) btn.title = "全屏" + '（F）';
-    const body = document.body;
-    if (body && body.classList) body.classList.toggle('fullscreen', on);
-  }
-
-  btn.addEventListener('click', toggle);
-  window.addEventListener('keydown', (ev) => {
-    if (ev.key !== 'f' && ev.key !== 'F') return;
-    const t = ev.target;
-    // 盘号 / 种子这类输入框里打字不能触发全屏，否则玩家输 seed 输到一半屏幕没了。
-    if (t && /input|textarea|select/i.test(t.tagName || '')) return;
-    if (ev.repeat || ev.metaKey || ev.ctrlKey || ev.altKey) return;
-    ev.preventDefault();
-    toggle();
-  });
-  window.addEventListener('fullscreenchange', sync);
-  window.addEventListener('webkitfullscreenchange', sync);
-  window.addEventListener('MSFullscreenChange', sync);
-  sync();
 })();
